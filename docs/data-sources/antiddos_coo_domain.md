@@ -28,3 +28,5 @@ data "st-alicloud_antiddos_coo_domain" "def" {
 ### Read-Only
 
 - `domain_cname` (String) Domain cname of antiddos.
+
+
