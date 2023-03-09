@@ -71,7 +71,7 @@ not fulfill the requirements of some scenario. The reason behind every resources
 - **st-alicloud_slb_load_balancers** - The tags parameter of AliCloud API [*DescribeLoadBalancers*](https://www.alibabacloud.com/help/en/server-load-balancer/latest/describeloadbalancers) will return all load balancers when any one of the tags are matched. This may be a problem when the user
   wants to match exactly all given tags:
 
-  | Name            | Tags                                            | Given tags: {   "location": "office"   "env"     : "test" } |
+  | Name            | Tags                                            | Given tags: { "location": "office" "env": "test" }          |
   |-----------------|-------------------------------------------------|-------------------------------------------------------------|
-  | load-balancer-A | {   "location": "office"   "env"     : "test" } | Matched (work as expected)                                  |
-  | load-balancer-B | {   "location": "office"   "env"     : "prod" } | Matched (should not be matched as the env is prod)          |
+  | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
+  | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the env is prod)          |
