@@ -46,7 +46,7 @@ Local Installation
 Why Custom Provider
 -------------------
 
-This custom provider exist due to some of the resources and data sources in the official AliCloud Terraform provider may
+This custom provider exists due to some of the resources and data sources in the official AliCloud Terraform provider may
 not fulfill the requirements of some scenario. The reason behind every resources and data sources are stated as below:
 
 ### Resources
@@ -57,21 +57,24 @@ not fulfill the requirements of some scenario. The reason behind every resources
   - setting the renewal status to *NotRenewal* when destroying the resource.
   - allowing changing of renewal period and status without recreating the GTM instsance.
 
-- **st-alicloud_alidns_record_weight** - Official AliCloud Terraform provider does not support the modification of DNS
-  records weight through Terraform.
+- **st-alicloud_alidns_record_weight** - Official AliCloud Terraform provider does not have the resource to modify DNS
+  records weight.
 
 ### Data Sources
 
 - **st-alicloud_antiddos_coo_domain** - Official AliCloud Terraform provider does not support querying the cname of
   Ddoscoo Domain Resources through [*alicloud_antiddos_coo_domain_resources*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/data-sources/ddoscoo_domain_resources).
 
-- **st-alicloud_cdn_domain** - Official AliCloud Terraform provider does not support querying the cname of CDN domain
-  through Terraform.
+- **st-alicloud_cdn_domain** - Official AliCloud Terraform provider does not have the data source to query the cname of
+  CDN domain.
 
-- **st-alicloud_slb_load_balancers** - The tags parameter of AliCloud API [*DescribeLoadBalancers*](https://www.alibabacloud.com/help/en/server-load-balancer/latest/describeloadbalancers) will return all load balancers when any one of the tags are matched. This may be a problem when the user
-  wants to match exactly all given tags:
+- **st-alicloud_slb_load_balancers** - The tags parameter of AliCloud API [*DescribeLoadBalancers*](https://www.alibabacloud.com/help/en/server-load-balancer/latest/describeloadbalancers) will return all load balancers when any one of the tags are matched. This may be a problem when the
+  user wants to match exactly all given tags, therefore this data source will filter once more after listing the load balancers
+  from AliCloud API to match all the given tags.
 
-  | Name            | Tags                                            | Given tags: { "location": "office" "env": "test" }          |
+  The example bahaviors of AliCloud API *DescribeLoadBalancers*:
+
+  | Load Balancer   | Tags                                            | Given tags: { "location": "office" "env": "test" }          |
   |-----------------|-------------------------------------------------|-------------------------------------------------------------|
   | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
   | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the env is prod)          |
