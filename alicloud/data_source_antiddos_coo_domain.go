@@ -37,7 +37,7 @@ func (d *antiddosCooDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *antiddosCooDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "This data source provides the BGP-Line Anti-DDoS Instance of the current Alibaba Cloud user.",
+		Description: "This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.",
 		Attributes: map[string]schema.Attribute{
 			"domain_name": schema.StringAttribute{
 				Description: "Domain name of antiddos.",

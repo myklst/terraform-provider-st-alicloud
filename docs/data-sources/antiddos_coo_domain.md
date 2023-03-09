@@ -3,12 +3,12 @@
 page_title: "st-alicloud_antiddos_coo_domain Data Source - st-alicloud"
 subcategory: ""
 description: |-
-  This data source provides the BGP-Line Anti-DDoS Instance of the current Alibaba Cloud user.
+  This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.
 ---
 
 # st-alicloud_antiddos_coo_domain (Data Source)
 
-This data source provides the BGP-Line Anti-DDoS Instance of the current Alibaba Cloud user.
+This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.
 
 ## Example Usage
 
@@ -28,5 +28,3 @@ data "st-alicloud_antiddos_coo_domain" "def" {
 ### Read-Only
 
 - `domain_cname` (String) Domain cname of antiddos.
-
-

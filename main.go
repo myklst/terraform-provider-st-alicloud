@@ -16,12 +16,10 @@ func main() {
 	testEnv := os.Getenv("ST-ALICLOUD_LOCAL_PATH")
 	if testEnv != "" {
 		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
-			Address: "myklst/st-alicloud",
-		})
-	} else {
-		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
 			Address: testEnv,
 		})
+	} else {
+		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{})
 	}
 
 }
