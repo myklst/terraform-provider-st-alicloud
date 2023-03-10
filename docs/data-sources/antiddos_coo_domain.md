@@ -3,12 +3,12 @@
 page_title: "st-alicloud_antiddos_coo_domain Data Source - st-alicloud"
 subcategory: ""
 description: |-
-  This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.
+  This data source provides the AntiDDoS domain resources of the current AliCloud user.
 ---
 
 # st-alicloud_antiddos_coo_domain (Data Source)
 
-This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.
+This data source provides the AntiDDoS domain resources of the current AliCloud user.
 
 ## Example Usage
 
@@ -23,10 +23,10 @@ data "st-alicloud_antiddos_coo_domain" "def" {
 
 ### Required
 
-- `domain_name` (String) Domain name of antiddos.
+- `domain_name` (String) Domain name of AntiDDoS.
 
 ### Read-Only
 
-- `domain_cname` (String) Domain cname of antiddos.
+- `domain_cname` (String) Domain CNAME of AntiDDoS.
 
 

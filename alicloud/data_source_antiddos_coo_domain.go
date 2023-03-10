@@ -37,14 +37,14 @@ func (d *antiddosCooDataSource) Metadata(_ context.Context, req datasource.Metad
 
 func (d *antiddosCooDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "This data source provides the Ddoscoo Domain Resources of the current Alibaba Cloud user.",
+		Description: "This data source provides the AntiDDoS domain resources of the current AliCloud user.",
 		Attributes: map[string]schema.Attribute{
 			"domain_name": schema.StringAttribute{
-				Description: "Domain name of antiddos.",
+				Description: "Domain name of AntiDDoS.",
 				Required:    true,
 			},
 			"domain_cname": schema.StringAttribute{
-				Description: "Domain cname of antiddos.",
+				Description: "Domain CNAME of AntiDDoS.",
 				Computed:    true,
 			},
 		},
@@ -72,7 +72,7 @@ func (d *antiddosCooDataSource) Read(ctx context.Context, req datasource.ReadReq
 	if domainName == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("domain_name"),
-			"Missing Antiddos Domain Name",
+			"Missing AntiDDoS domain name",
 			"Domain name must not be empty",
 		)
 		return
@@ -110,7 +110,7 @@ func (d *antiddosCooDataSource) Read(ctx context.Context, req datasource.ReadReq
 		_, err := util.AssertAsString(error.Message)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Query Antiddos Web Rules",
+				"[API ERROR] Failed to query AntiDDoS web rules",
 				err.Error(),
 			)
 			return
