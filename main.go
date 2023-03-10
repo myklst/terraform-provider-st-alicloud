@@ -19,7 +19,7 @@ func main() {
 		})
 	} else {
 		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
-			Address: "registry.terraform.io/styumyum/st-alicloud",
+			Address: "registry.terraform.io/myklst/st-alicloud",
 		})
 	}
 
