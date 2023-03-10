@@ -46,30 +46,49 @@ Local Installation
 Why Custom Provider
 -------------------
 
-This custom provider exists due to some of the resources and data sources in the official AliCloud Terraform provider may
-not fulfill the requirements of some scenario. The reason behind every resources and data sources are stated as below:
+This custom provider exists due to some of the resources and data sources in the
+official AliCloud Terraform provider may not fulfill the requirements of some
+scenario. The reason behind every resources and data sources are stated as below:
 
 ### Resources
 
-- **st-alicloud_alidns_gtm_instance** - The original reason to write this resource is official AliCloud Terraform provider
-  does not support creating GTM (Global Traffic Manager) instance on AliCloud international account using Terraform. As we
-  developing on the resource, we added few more features which are useful in our use case, which includes:
-  - setting the renewal status to *NotRenewal* when destroying the resource.
-  - allowing changing of renewal period and status without recreating the GTM instsance.
+- **st-alicloud_alidns_gtm_instance**
 
-- **st-alicloud_alidns_record_weight** - Official AliCloud Terraform provider does not have the resource to modify DNS
+  The original reason to write this resource is official AliCloud Terraform
+  provider does not support creating GTM (Global Traffic Manager) instance on
+  AliCloud international account using Terraform. As we developing on the
+  resource, we added few more features which are useful in our use case, which
+  includes:
+
+    - setting the renewal status to *NotRenewal* when destroying the resource.
+
+    - allowing changing of renewal period and status without recreating the GTM instsance.
+
+- **st-alicloud_alidns_record_weight**
+
+  Official AliCloud Terraform provider does not have the resource to modify DNS
   records weight.
 
 ### Data Sources
 
-- **st-alicloud_antiddos_coo_domain** - Official AliCloud Terraform provider does not support querying the cname of
-  Ddoscoo Domain Resources through [*alicloud_antiddos_coo_domain_resources*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/data-sources/ddoscoo_domain_resources).
+- **st-alicloud_antiddos_coo_domain**
 
-- **st-alicloud_cdn_domain** - Official AliCloud Terraform provider does not have the data source to query the cname of
-  CDN domain.
+  Official AliCloud Terraform provider does not support querying the CNAME of
+  AntiDDoS domain resources through
+  [*alicloud_antiddos_coo_domain_resources*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/data-sources/ddoscoo_domain_resources).
 
-- **st-alicloud_slb_load_balancers** - The tags parameter of AliCloud API [*DescribeLoadBalancers*](https://www.alibabacloud.com/help/en/server-load-balancer/latest/describeloadbalancers) will return all load balancers when any one of the tags are matched. This may be a problem when the
-  user wants to match exactly all given tags, therefore this data source will filter once more after listing the load balancers
+- **st-alicloud_cdn_domain**
+
+  Official AliCloud Terraform provider does not have the data source to query
+  the CNAME of CDN domain.
+
+- **st-alicloud_slb_load_balancers**
+
+  The tags parameter of AliCloud API
+  [*DescribeLoadBalancers*](https://www.alibabacloud.com/help/en/server-load-balancer/latest/describeloadbalancers)
+  will return all load balancers when any one of the tags are matched. This may
+  be a problem when the user wants to match exactly all given tags, therefore
+  this data source will filter once more after listing the load balancers
   from AliCloud API to match all the given tags.
 
   The example bahaviors of AliCloud API *DescribeLoadBalancers*:
@@ -77,4 +96,4 @@ not fulfill the requirements of some scenario. The reason behind every resources
   | Load Balancer   | Tags                                            | Given tags: { "location": "office" "env": "test" }          |
   |-----------------|-------------------------------------------------|-------------------------------------------------------------|
   | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
-  | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the env is prod)          |
+  | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the `env` is prod)          |
