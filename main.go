@@ -12,15 +12,11 @@ import (
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name st-alicloud
 
 func main() {
-	testEnv := os.Getenv("PROVIDER_LOCAL_PATH")
-	if testEnv != "" {
-		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
-			Address: testEnv,
-		})
-	} else {
-		providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
-			Address: "registry.terraform.io/myklst/st-alicloud",
-		})
+	providerAddress := os.Getenv("PROVIDER_LOCAL_PATH")
+	if providerAddress == "" {
+		providerAddress = "registry.terraform.io/myklst/st-alicloud"
 	}
-
+	providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
+		Address: providerAddress,
+	})
 }
