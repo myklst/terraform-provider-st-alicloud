@@ -3,12 +3,6 @@ Terraform Custom Provider for Alibaba Cloud
 
 This Terraform custom provider is designed for own use case scenario.
 
-References
-----------
-
-- Website: https://www.terraform.io
-- AliCloud official Terraform provider: https://github.com/aliyun/terraform-provider-alicloud
-
 Supported Versions
 ------------------
 
@@ -101,4 +95,6 @@ scenario. The reason behind every resources and data sources are stated as below
 References
 ----------
 
-- https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework
+- Website: https://www.terraform.io
+- Terraform Plugin Framework: https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework
+- AliCloud official Terraform provider: https://github.com/aliyun/terraform-provider-alicloud
