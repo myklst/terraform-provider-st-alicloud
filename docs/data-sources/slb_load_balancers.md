@@ -37,20 +37,20 @@ output "slb_load_balancers" {
 
 ### Optional
 
-- `name` (String)
-- `tags` (Map of String)
+- `name` (String) The name of the SLBs.
+- `tags` (Map of String) A map of tags assigned to the SLB instances.
 
 ### Read-Only
 
-- `load_balancers` (Attributes List) (see [below for nested schema](#nestedatt--load_balancers))
+- `load_balancers` (Attributes List) A list of SLBs. (see [below for nested schema](#nestedatt--load_balancers))
 
 <a id="nestedatt--load_balancers"></a>
 ### Nested Schema for `load_balancers`
 
 Read-Only:
 
-- `id` (String)
-- `name` (String)
-- `tags` (Map of String)
+- `id` (String) ID of the SLB.
+- `name` (String) The name of the SLB.
+- `tags` (Map of String) The tags of the SLB.
 
 
