@@ -18,6 +18,7 @@ import (
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
+	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 )
 
@@ -28,6 +29,7 @@ type alicloudClients struct {
 	antiddosClient *alicloudAntiddosClient.Client
 	dnsClient      *alicloudDnsClient.Client
 	slbClient      *alicloudSlbClient.Client
+	ramClient      *alicloudRamClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -261,6 +263,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud SLB Client
+	ramClientConfig := clientCredentialsConfig
+	ramClientConfig.Endpoint = tea.String("ram.aliyuncs.com")
+	ramClient, err := alicloudRamClient.NewClient(ramClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud RAM API Client",
+			"An unexpected error occurred when creating the AliCloud RAM API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud RAM Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:     baseClient,
@@ -268,6 +285,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		antiddosClient: antiddosClient,
 		dnsClient:      dnsClient,
 		slbClient:      slbClient,
+		ramClient:      ramClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -286,5 +304,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 	return []func() resource.Resource{
 		NewAliDnsRecordWeightResource,
 		NewAliDnsGtmInstanceResource,
+		NewAlicloudRamGroupMembershipResource,
 	}
 }
