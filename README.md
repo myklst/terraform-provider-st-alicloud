@@ -65,6 +65,7 @@ scenario. The reason behind every resources and data sources are stated as below
 
 - **st-alicloud_ram_user_group_attachment**
 
+  The official AliCloud Terraform provider's resource
   [*alicloud_ram_group_membership*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/ram_group_membership)
   will remove all other attached users for the target group, which may cause a
   problem where Terraform may delete those users attached outside from Terraform.
