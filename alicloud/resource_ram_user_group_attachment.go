@@ -16,30 +16,30 @@ import (
 )
 
 var (
-	_ resource.Resource              = &alicloudRamGroupMembershipResource{}
-	_ resource.ResourceWithConfigure = &alicloudRamGroupMembershipResource{}
+	_ resource.Resource              = &ramUserGroupAttachment{}
+	_ resource.ResourceWithConfigure = &ramUserGroupAttachment{}
 )
 
-func NewAlicloudRamGroupMembershipResource() resource.Resource {
-	return &alicloudRamGroupMembershipResource{}
+func NewRamUserGroupAttachment() resource.Resource {
+	return &ramUserGroupAttachment{}
 }
 
-type alicloudRamGroupMembershipResource struct {
+type ramUserGroupAttachment struct {
 	client *alicloudRamClient.Client
 }
 
-type alicloudRamGroupMembershipResourceModel struct {
+type ramUserGroupAttachmentModel struct {
 	GroupName types.String `tfsdk:"group_name"`
 	UserName  types.String `tfsdk:"user_name"`
 }
 
-func (r *alicloudRamGroupMembershipResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_alicloud_ram_group_membership"
+func (r *ramUserGroupAttachment) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_ram_user_group_attachment"
 }
 
-func (r *alicloudRamGroupMembershipResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *ramUserGroupAttachment) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Provides a Alicloud RAM Group Membership resource.",
+		Description: "Provides a Alicloud RAM User Group Attachment resource.",
 		Attributes: map[string]schema.Attribute{
 			"group_name": schema.StringAttribute{
 				Description: "The group name.",
@@ -53,15 +53,15 @@ func (r *alicloudRamGroupMembershipResource) Schema(_ context.Context, _ resourc
 	}
 }
 
-func (r *alicloudRamGroupMembershipResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *ramUserGroupAttachment) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).ramClient
 }
 
-func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan *alicloudRamGroupMembershipResourceModel
+func (r *ramUserGroupAttachment) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan *ramUserGroupAttachmentModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -73,27 +73,7 @@ func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req res
 		GroupName: tea.String(plan.GroupName.ValueString()),
 	}
 
-	addUserToGroup := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		_, err := r.client.AddUserToGroupWithOptions(addUserToGroupRequest, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(addUserToGroup, reconnectBackoff)
+	err := r.addUserToGroup(addUserToGroupRequest)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Add User to Group",
@@ -102,7 +82,7 @@ func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req res
 		return
 	}
 
-	state := &alicloudRamGroupMembershipResourceModel{}
+	state := &ramUserGroupAttachmentModel{}
 	state.GroupName = plan.GroupName
 	state.UserName = plan.UserName
 
@@ -113,8 +93,8 @@ func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req res
 	}
 }
 
-func (r *alicloudRamGroupMembershipResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state *alicloudRamGroupMembershipResourceModel
+func (r *ramUserGroupAttachment) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state *ramUserGroupAttachmentModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -141,13 +121,12 @@ func (r *alicloudRamGroupMembershipResource) Read(ctx context.Context, req resou
 			}
 		}
 
-		for i := range listUserForGroupResponse.Body.Users.User {
-			if listUserForGroupResponse.Body.Users.User != nil && *listUserForGroupResponse.Body.Users.User[i].UserName == state.UserName.ValueString() {
+		for _, user := range listUserForGroupResponse.Body.Users.User {
+			if *user.UserName == state.UserName.ValueString() {
 				return nil
 			}
 		}
 		state.UserName = types.StringValue("")
-
 		return nil
 	}
 
@@ -169,8 +148,8 @@ func (r *alicloudRamGroupMembershipResource) Read(ctx context.Context, req resou
 	}
 }
 
-func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan *alicloudRamGroupMembershipResourceModel
+func (r *ramUserGroupAttachment) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan *ramUserGroupAttachmentModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -182,27 +161,7 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 		GroupName: tea.String(plan.GroupName.ValueString()),
 	}
 
-	updateUserGroup := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		_, err := r.client.AddUserToGroupWithOptions(updateUserGroupRequest, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(updateUserGroup, reconnectBackoff)
+	err := r.addUserToGroup(updateUserGroupRequest)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Add User to Group",
@@ -211,7 +170,7 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 		return
 	}
 
-	state := alicloudRamGroupMembershipResourceModel{}
+	state := ramUserGroupAttachmentModel{}
 	state.GroupName = plan.GroupName
 	state.UserName = plan.UserName
 
@@ -222,8 +181,8 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 	}
 }
 
-func (r *alicloudRamGroupMembershipResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state *alicloudRamGroupMembershipResourceModel
+func (r *ramUserGroupAttachment) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state *ramUserGroupAttachmentModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -244,4 +203,28 @@ func (r *alicloudRamGroupMembershipResource) Delete(ctx context.Context, req res
 			fmt.Sprint(state),
 		)
 	}
+}
+
+func (r *ramUserGroupAttachment) addUserToGroup(req *alicloudRamClient.AddUserToGroupRequest) (err error) {
+	addUserToGroup := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		_, err := r.client.AddUserToGroupWithOptions(req, runtime)
+		if err != nil {
+			if _t, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return err
+				} else {
+					return backoff.Permanent(err)
+				}
+			} else {
+				return err
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	return backoff.Retry(addUserToGroup, reconnectBackoff)
 }

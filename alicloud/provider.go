@@ -263,7 +263,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// AliCloud SLB Client
+	// AliCloud RAM Client
 	ramClientConfig := clientCredentialsConfig
 	ramClientConfig.Endpoint = tea.String("ram.aliyuncs.com")
 	ramClient, err := alicloudRamClient.NewClient(ramClientConfig)
@@ -304,6 +304,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 	return []func() resource.Resource{
 		NewAliDnsRecordWeightResource,
 		NewAliDnsGtmInstanceResource,
-		NewAlicloudRamGroupMembershipResource,
+		NewRamUserGroupAttachment,
 	}
 }
