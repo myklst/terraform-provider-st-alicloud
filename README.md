@@ -62,13 +62,12 @@ scenario. The reason behind every resources and data sources are stated as below
 
   Official AliCloud Terraform provider does not have the resource to modify DNS
   records weight.
-  
+
 - **st-alicloud_ram_user_group_attachment**
-  
-  The original reason to write this resource is Official AliCloud Terraform 
-  provider will remove all attached group of a user when destroying the resource. 
-  Therefore, we have developed this custom provider to avoid all attached group 
-  of a user to be destroyed at the same time but only destroyed selected groups.
+
+  [*alicloud_ram_group_membership*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/ram_group_membership)
+  will remove all other attached users for the target group, which may cause a
+  problem where Terraform may delete those users attached outside from Terraform.
 
 ### Data Sources
 

@@ -2,7 +2,6 @@ package alicloud
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -200,7 +199,7 @@ func (r *ramUserGroupAttachmentResource) Delete(ctx context.Context, req resourc
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Remove User from Group",
-			fmt.Sprint(state),
+			err.Error(),
 		)
 	}
 }
