@@ -48,29 +48,29 @@ func (d *slbLoadBalancersDataSource) Schema(ctx context.Context, req datasource.
 		Description: "This data source provides the Server Load Balancers of the current Alibaba Cloud user.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "",
+				Description: "The name of the SLBs.",
 				Optional:    true,
 			},
 			"tags": schema.MapAttribute{
-				Description: "",
+				Description: "A map of tags assigned to the SLB instances.",
 				ElementType: types.StringType,
 				Optional:    true,
 			},
 			"load_balancers": schema.ListNestedAttribute{
-				Description: "",
+				Description: "A list of SLBs.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Description: "",
+							Description: "ID of the SLB.",
 							Computed:    true,
 						},
 						"name": schema.StringAttribute{
-							Description: "",
+							Description: "The name of the SLB.",
 							Computed:    true,
 						},
 						"tags": schema.MapAttribute{
-							Description: "",
+							Description: "The tags of the SLB.",
 							ElementType: types.StringType,
 							Computed:    true,
 						},
