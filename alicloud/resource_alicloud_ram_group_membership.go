@@ -31,7 +31,7 @@ type alicloudRamGroupMembershipResource struct {
 
 type alicloudRamGroupMembershipResourceModel struct {
 	GroupName types.String `tfsdk:"group_name"`
-	UserNames types.String `tfsdk:"user_names"`
+	UserName  types.String `tfsdk:"user_name"`
 }
 
 func (r *alicloudRamGroupMembershipResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -43,11 +43,11 @@ func (r *alicloudRamGroupMembershipResource) Schema(_ context.Context, _ resourc
 		Description: "Provides a Alicloud RAM Group Membership resource.",
 		Attributes: map[string]schema.Attribute{
 			"group_name": schema.StringAttribute{
-				Description: "The group name",
+				Description: "The group name.",
 				Required:    true,
 			},
-			"user_names": schema.StringAttribute{
-				Description: "List of users in the group.",
+			"user_name": schema.StringAttribute{
+				Description: "The username of the RAM group member.",
 				Required:    true,
 			},
 		},
@@ -69,17 +69,8 @@ func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req res
 		return
 	}
 
-	if plan.GroupName.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("group_name"),
-			"Missing Group Name",
-			"RAM user group group_name must not be empty.",
-		)
-		return
-	}
-
 	addUserToGroupRequest := &alicloudRamClient.AddUserToGroupRequest{
-		UserName:  tea.String(plan.UserNames.ValueString()),
+		UserName:  tea.String(plan.UserName.ValueString()),
 		GroupName: tea.String(plan.GroupName.ValueString()),
 	}
 
@@ -114,7 +105,7 @@ func (r *alicloudRamGroupMembershipResource) Create(ctx context.Context, req res
 
 	state := &alicloudRamGroupMembershipResourceModel{}
 	state.GroupName = plan.GroupName
-	state.UserNames = plan.UserNames
+	state.UserName = plan.UserName
 
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
@@ -151,14 +142,12 @@ func (r *alicloudRamGroupMembershipResource) Read(ctx context.Context, req resou
 			}
 		}
 
-		var username string
-		for _, group := range listUserForGroupResponse.Body.Users.User {
-			if listUserForGroupResponse.Body.Users.User != nil {
-				username = *group.UserName
+		for i := range listUserForGroupResponse.Body.Users.User {
+			if (listUserForGroupResponse.Body.Users.User != nil && *listUserForGroupResponse.Body.Users.User[i].UserName == state.UserName.ValueString()){
+				return nil
 			}
 		}
-
-		state.UserNames = types.StringValue(username)
+		state.UserName = types.StringValue("")
 
 		return nil
 	}
@@ -199,7 +188,7 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 	}
 
 	updateUserGroupRequest := &alicloudRamClient.AddUserToGroupRequest{
-		UserName:  tea.String(plan.UserNames.ValueString()),
+		UserName:  tea.String(plan.UserName.ValueString()),
 		GroupName: tea.String(plan.GroupName.ValueString()),
 	}
 
@@ -234,7 +223,7 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 
 	state := alicloudRamGroupMembershipResourceModel{}
 	state.GroupName = plan.GroupName
-	state.UserNames = plan.UserNames
+	state.UserName = plan.UserName
 
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
@@ -252,7 +241,7 @@ func (r *alicloudRamGroupMembershipResource) Delete(ctx context.Context, req res
 	}
 
 	removeUserFromGroupRequest := &alicloudRamClient.RemoveUserFromGroupRequest{
-		UserName:  tea.String(state.UserNames.ValueString()),
+		UserName:  tea.String(state.UserName.ValueString()),
 		GroupName: tea.String(state.GroupName.ValueString()),
 	}
 
