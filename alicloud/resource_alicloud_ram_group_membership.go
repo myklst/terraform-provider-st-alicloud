@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -143,7 +142,7 @@ func (r *alicloudRamGroupMembershipResource) Read(ctx context.Context, req resou
 		}
 
 		for i := range listUserForGroupResponse.Body.Users.User {
-			if (listUserForGroupResponse.Body.Users.User != nil && *listUserForGroupResponse.Body.Users.User[i].UserName == state.UserName.ValueString()){
+			if listUserForGroupResponse.Body.Users.User != nil && *listUserForGroupResponse.Body.Users.User[i].UserName == state.UserName.ValueString() {
 				return nil
 			}
 		}
@@ -175,15 +174,6 @@ func (r *alicloudRamGroupMembershipResource) Update(ctx context.Context, req res
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if plan.GroupName.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("group_name"),
-			"Missing Group Name",
-			"RAM user group group_name must not be empty.",
-		)
 		return
 	}
 
