@@ -16,28 +16,28 @@ import (
 )
 
 var (
-	_ resource.Resource              = &ramUserGroupAttachment{}
-	_ resource.ResourceWithConfigure = &ramUserGroupAttachment{}
+	_ resource.Resource              = &ramUserGroupAttachmentResource{}
+	_ resource.ResourceWithConfigure = &ramUserGroupAttachmentResource{}
 )
 
-func NewRamUserGroupAttachment() resource.Resource {
-	return &ramUserGroupAttachment{}
+func NewRamUserGroupAttachmentResource() resource.Resource {
+	return &ramUserGroupAttachmentResource{}
 }
 
-type ramUserGroupAttachment struct {
+type ramUserGroupAttachmentResource struct {
 	client *alicloudRamClient.Client
 }
 
-type ramUserGroupAttachmentModel struct {
+type ramUserGroupAttachmentResourceModel struct {
 	GroupName types.String `tfsdk:"group_name"`
 	UserName  types.String `tfsdk:"user_name"`
 }
 
-func (r *ramUserGroupAttachment) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *ramUserGroupAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ram_user_group_attachment"
 }
 
-func (r *ramUserGroupAttachment) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *ramUserGroupAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Provides a Alicloud RAM User Group Attachment resource.",
 		Attributes: map[string]schema.Attribute{
@@ -53,15 +53,15 @@ func (r *ramUserGroupAttachment) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *ramUserGroupAttachment) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *ramUserGroupAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).ramClient
 }
 
-func (r *ramUserGroupAttachment) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan *ramUserGroupAttachmentModel
+func (r *ramUserGroupAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan *ramUserGroupAttachmentResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -82,7 +82,7 @@ func (r *ramUserGroupAttachment) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	state := &ramUserGroupAttachmentModel{}
+	state := &ramUserGroupAttachmentResourceModel{}
 	state.GroupName = plan.GroupName
 	state.UserName = plan.UserName
 
@@ -93,8 +93,8 @@ func (r *ramUserGroupAttachment) Create(ctx context.Context, req resource.Create
 	}
 }
 
-func (r *ramUserGroupAttachment) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state *ramUserGroupAttachmentModel
+func (r *ramUserGroupAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state *ramUserGroupAttachmentResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -148,8 +148,8 @@ func (r *ramUserGroupAttachment) Read(ctx context.Context, req resource.ReadRequ
 	}
 }
 
-func (r *ramUserGroupAttachment) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan *ramUserGroupAttachmentModel
+func (r *ramUserGroupAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan *ramUserGroupAttachmentResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -170,7 +170,7 @@ func (r *ramUserGroupAttachment) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	state := ramUserGroupAttachmentModel{}
+	state := ramUserGroupAttachmentResourceModel{}
 	state.GroupName = plan.GroupName
 	state.UserName = plan.UserName
 
@@ -181,8 +181,8 @@ func (r *ramUserGroupAttachment) Update(ctx context.Context, req resource.Update
 	}
 }
 
-func (r *ramUserGroupAttachment) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state *ramUserGroupAttachmentModel
+func (r *ramUserGroupAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state *ramUserGroupAttachmentResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -205,7 +205,7 @@ func (r *ramUserGroupAttachment) Delete(ctx context.Context, req resource.Delete
 	}
 }
 
-func (r *ramUserGroupAttachment) addUserToGroup(req *alicloudRamClient.AddUserToGroupRequest) (err error) {
+func (r *ramUserGroupAttachmentResource) addUserToGroup(req *alicloudRamClient.AddUserToGroupRequest) (err error) {
 	addUserToGroup := func() error {
 		runtime := &util.RuntimeOptions{}
 
