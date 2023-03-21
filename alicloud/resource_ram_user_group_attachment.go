@@ -72,6 +72,7 @@ func (r *ramUserGroupAttachmentResource) Create(ctx context.Context, req resourc
 			"[API ERROR] Failed to Add User to Group.",
 			err.Error(),
 		)
+		return
 	}
 
 	state := &ramUserGroupAttachmentResourceModel{}
@@ -153,6 +154,7 @@ func (r *ramUserGroupAttachmentResource) Update(ctx context.Context, req resourc
 			"[API ERROR] Failed to Add User to Group.",
 			err.Error(),
 		)
+		return
 	}
 
 	state := ramUserGroupAttachmentResourceModel{}
