@@ -183,12 +183,12 @@ func (r *ramUserGroupAttachmentResource) Delete(ctx context.Context, req resourc
 
 	runtime := &util.RuntimeOptions{}
 
-	_, err := r.client.RemoveUserFromGroupWithOptions(removeUserFromGroupRequest, runtime)
-	if err != nil {
+	if _, err := r.client.RemoveUserFromGroupWithOptions(removeUserFromGroupRequest, runtime); err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Remove User from Group",
 			err.Error(),
 		)
+		return
 	}
 }
 
@@ -201,8 +201,7 @@ func (r *ramUserGroupAttachmentResource) addUserToGroup(plan *ramUserGroupAttach
 	addUserToGroup := func() error {
 		runtime := &util.RuntimeOptions{}
 
-		_, err := r.client.AddUserToGroupWithOptions(addUserToGroupRequest, runtime)
-		if err != nil {
+		if _, err := r.client.AddUserToGroupWithOptions(addUserToGroupRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*_t.Code) {
 					return err
