@@ -16,7 +16,7 @@ The Alibaba Cloud provider is used to interact with the many resources supported
 terraform {
   required_providers {
     st-alicloud = {
-      source = "ruokei/st-alicloud"
+      source = "myklst/st-alicloud"
     }
   }
 }
