@@ -250,7 +250,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud SLB Client
 	slbClientConfig := clientCredentialsConfig
-	slbClientConfig.Endpoint = tea.String("slb.aliyuncs.com")
+	slbClientConfig.Endpoint = tea.String(fmt.Sprintf("slb.%s.aliyuncs.com", region))
 	slbClient, err := alicloudSlbClient.NewClient(slbClientConfig)
 
 	if err != nil {
