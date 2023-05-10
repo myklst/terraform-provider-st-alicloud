@@ -213,14 +213,13 @@ func (r *aliDnsRecordWeightResource) Read(ctx context.Context, req resource.Read
 	if err != nil {
 		if err.Error() == "domain record not found" {
 			resp.State.RemoveResource(ctx)
-			return
 		} else {
 			resp.Diagnostics.AddError(
 				"[API ERROR] Failed to Read DNS Record Weight",
 				err.Error(),
 			)
-			return
 		}
+		return
 	}
 
 	// Set refreshed state
