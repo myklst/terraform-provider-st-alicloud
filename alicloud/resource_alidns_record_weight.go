@@ -136,6 +136,9 @@ func (r *aliDnsRecordWeightResource) Read(ctx context.Context, req resource.Read
 				if isAbleToRetry(*_t.Code) {
 					return err
 				} else {
+					if *_t.Code == "InvalidRR.NoExist" {
+						return backoff.Permanent(fmt.Errorf("domain record not found"))
+					}
 					return backoff.Permanent(err)
 				}
 			} else {
@@ -208,11 +211,16 @@ func (r *aliDnsRecordWeightResource) Read(ctx context.Context, req resource.Read
 
 	err := backoff.Retry(readRecordWeight, reconnectBackoff)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read DNS Record Weight",
-			err.Error(),
-		)
-		return
+		if err.Error() == "domain record not found" {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to Read DNS Record Weight",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	// Set refreshed state
