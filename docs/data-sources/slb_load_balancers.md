@@ -3,12 +3,12 @@
 page_title: "st-alicloud_slb_load_balancers Data Source - st-alicloud"
 subcategory: ""
 description: |-
-  This data source provides the Server Load Balancers of the current Alibaba Cloud user.
+  This data source provides the Server Load Balancers in desired region or user account.
 ---
 
 # st-alicloud_slb_load_balancers (Data Source)
 
-This data source provides the Server Load Balancers of the current Alibaba Cloud user.
+This data source provides the Server Load Balancers in desired region or user account.
 
 ## Example Usage
 
@@ -37,6 +37,9 @@ output "slb_load_balancers" {
 
 ### Optional
 
+- `region` (String) The region of the SLBs. Default to use region configuredin the provider.
+- `access_key` (String) The access key that have permissions to list SLBs. Default to use access key configured in the provider.
+- `secret_key` (String) The secret key that have permissions to lsit SLBs. Default to use secret key configured in the provider.
 - `name` (String) The name of the SLBs.
 - `tags` (Map of String) A map of tags assigned to the SLB instances.
 

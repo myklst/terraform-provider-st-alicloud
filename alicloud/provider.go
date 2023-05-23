@@ -19,17 +19,16 @@ import (
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
-	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 )
 
 // Wrapper of AliCloud client
 type alicloudClients struct {
-	baseClient     *alicloudBaseClient.Client
-	cdnClient      *alicloudCdnClient.Client
-	antiddosClient *alicloudAntiddosClient.Client
-	dnsClient      *alicloudDnsClient.Client
-	slbClient      *alicloudSlbClient.Client
-	ramClient      *alicloudRamClient.Client
+	baseClient              *alicloudBaseClient.Client
+	cdnClient               *alicloudCdnClient.Client
+	antiddosClient          *alicloudAntiddosClient.Client
+	dnsClient               *alicloudDnsClient.Client
+	ramClient               *alicloudRamClient.Client
+	clientCredentialsConfig *alicloudOpenapiClient.Config
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -248,21 +247,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// AliCloud SLB Client
-	slbClientConfig := clientCredentialsConfig
-	slbClientConfig.Endpoint = tea.String(fmt.Sprintf("slb.%s.aliyuncs.com", region))
-	slbClient, err := alicloudSlbClient.NewClient(slbClientConfig)
-
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Create AliCloud SLB API Client",
-			"An unexpected error occurred when creating the AliCloud DNS API client. "+
-				"If the error is not clear, please contact the provider developers.\n\n"+
-				"AliCloud DNS Client Error: "+err.Error(),
-		)
-		return
-	}
-
 	// AliCloud RAM Client
 	ramClientConfig := clientCredentialsConfig
 	ramClientConfig.Endpoint = tea.String("ram.aliyuncs.com")
@@ -280,12 +264,12 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
-		baseClient:     baseClient,
-		cdnClient:      cdnClient,
-		antiddosClient: antiddosClient,
-		dnsClient:      dnsClient,
-		slbClient:      slbClient,
-		ramClient:      ramClient,
+		baseClient:              baseClient,
+		cdnClient:               cdnClient,
+		antiddosClient:          antiddosClient,
+		dnsClient:               dnsClient,
+		ramClient:               ramClient,
+		clientCredentialsConfig: clientCredentialsConfig,
 	}
 
 	resp.DataSourceData = alicloudClients

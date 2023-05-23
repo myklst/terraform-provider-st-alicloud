@@ -103,7 +103,7 @@ scenario. The reason behind every resources and data sources are stated as below
   | Load Balancer   | Tags                                            | Given tags: { "location": "office" "env": "test" }          |
   |-----------------|-------------------------------------------------|-------------------------------------------------------------|
   | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
-  | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the `env` is prod)          |
+  | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the `env` is prod)        |
 
 References
 ----------

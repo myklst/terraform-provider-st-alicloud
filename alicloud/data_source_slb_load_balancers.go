@@ -3,8 +3,10 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
@@ -24,10 +26,13 @@ func NewSlbLoadBalancersDataSource() datasource.DataSource {
 }
 
 type slbLoadBalancersDataSource struct {
-	client *alicloudSlbClient.Client
+	defaultCredentialConfig *alicloudOpenapiClient.Config
 }
 
 type slbLoadBalancersDataSourceModel struct {
+	Region        types.String              `tfsdk:"region"`
+	AccessKey     types.String              `tfsdk:"access_key"`
+	SecretKey     types.String              `tfsdk:"secret_key"`
 	Name          types.String              `tfsdk:"name"`
 	Tags          types.Map                 `tfsdk:"tags"`
 	LoadBalancers []*slbLoadBalancersDetail `tfsdk:"load_balancers"`
@@ -45,8 +50,23 @@ func (d *slbLoadBalancersDataSource) Metadata(ctx context.Context, req datasourc
 
 func (d *slbLoadBalancersDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "This data source provides the Server Load Balancers of the current Alibaba Cloud user.",
+		Description: "This data source provides the Server Load Balancers in desired region or user account.",
 		Attributes: map[string]schema.Attribute{
+			"region": schema.StringAttribute{
+				Description: "The region of the SLBs. Default to use region configured" +
+					"in the provider.",
+				Optional: true,
+			},
+			"access_key": schema.StringAttribute{
+				Description: "The access key that have permissions to list SLBs. " +
+					"Default to use access key configured in the provider.",
+				Optional: true,
+			},
+			"secret_key": schema.StringAttribute{
+				Description: "The secret key that have permissions to lsit SLBs. " +
+					"Default to use secret key configured in the provider.",
+				Optional: true,
+			},
 			"name": schema.StringAttribute{
 				Description: "The name of the SLBs.",
 				Optional:    true,
@@ -86,7 +106,7 @@ func (d *slbLoadBalancersDataSource) Configure(ctx context.Context, req datasour
 		return
 	}
 
-	d.client = req.ProviderData.(alicloudClients).slbClient
+	d.defaultCredentialConfig = req.ProviderData.(alicloudClients).clientCredentialsConfig
 }
 
 func (d *slbLoadBalancersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -100,11 +120,52 @@ func (d *slbLoadBalancersDataSource) Read(ctx context.Context, req datasource.Re
 
 	pageNumber := 0
 
+	var region, accessKey, secretKey string
+
+	if plan.Region.IsUnknown() || plan.Region.IsNull() || plan.Region.String() == "" {
+		region = *d.defaultCredentialConfig.RegionId
+	} else {
+		region = plan.Region.ValueString()
+	}
+
+	if plan.AccessKey.IsUnknown() || plan.AccessKey.IsNull() || plan.AccessKey.String() == "" {
+		accessKey = *d.defaultCredentialConfig.AccessKeyId
+	} else {
+		accessKey = plan.AccessKey.ValueString()
+	}
+
+	if plan.SecretKey.IsUnknown() || plan.SecretKey.IsNull() || plan.SecretKey.String() == "" {
+		secretKey = *d.defaultCredentialConfig.AccessKeySecret
+	} else {
+		secretKey = plan.SecretKey.ValueString()
+	}
+
+	clientCredentialsConfig := &alicloudOpenapiClient.Config{
+		RegionId:        &region,
+		AccessKeyId:     &accessKey,
+		AccessKeySecret: &secretKey,
+	}
+
+	// AliCloud SLB Client
+	slbClientConfig := clientCredentialsConfig
+	slbClientConfig.Endpoint = tea.String(fmt.Sprintf("slb.%s.aliyuncs.com", region))
+	slbClient, err := alicloudSlbClient.NewClient(slbClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud SLB API Client",
+			"An unexpected error occurred when creating the AliCloud SLB API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud SLB Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	state := &slbLoadBalancersDataSourceModel{}
 	state.LoadBalancers = []*slbLoadBalancersDetail{}
 
 	describeLoadBalancersRequest := &alicloudSlbClient.DescribeLoadBalancersRequest{
-		RegionId: tea.String(*d.client.RegionId),
+		RegionId: tea.String(*slbClient.RegionId),
 		PageSize: tea.Int32(100),
 	}
 
@@ -154,7 +215,7 @@ func (d *slbLoadBalancersDataSource) Read(ctx context.Context, req datasource.Re
 		pageNumber++
 		describeLoadBalancersRequest.PageNumber = tea.Int32(int32(pageNumber))
 
-		describeLoadBalancersResponse, err := d.client.DescribeLoadBalancersWithOptions(describeLoadBalancersRequest, runtime)
+		describeLoadBalancersResponse, err := slbClient.DescribeLoadBalancersWithOptions(describeLoadBalancersRequest, runtime)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"[API ERROR] failed to query load balancers",
