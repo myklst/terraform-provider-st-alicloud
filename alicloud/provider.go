@@ -2,10 +2,8 @@ package alicloud
 
 import (
 	"context"
-	"fmt"
 	"os"
 
-	"github.com/alibabacloud-go/tea/tea"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -19,16 +17,17 @@ import (
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
+	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 )
 
 // Wrapper of AliCloud client
 type alicloudClients struct {
-	baseClient              *alicloudBaseClient.Client
-	cdnClient               *alicloudCdnClient.Client
-	antiddosClient          *alicloudAntiddosClient.Client
-	dnsClient               *alicloudDnsClient.Client
-	ramClient               *alicloudRamClient.Client
-	clientCredentialsConfig *alicloudOpenapiClient.Config
+	baseClient     *alicloudBaseClient.Client
+	cdnClient      *alicloudCdnClient.Client
+	antiddosClient *alicloudAntiddosClient.Client
+	slbClient      *alicloudSlbClient.Client
+	dnsClient      *alicloudDnsClient.Client
+	ramClient      *alicloudRamClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -204,7 +203,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud CDN Client
 	cdnClientConfig := clientCredentialsConfig
-	cdnClientConfig.Endpoint = tea.String("cdn.aliyuncs.com")
 	cdnClient, err := alicloudCdnClient.NewClient(cdnClientConfig)
 
 	if err != nil {
@@ -219,7 +217,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud Antiddos Client
 	antiddosClientConfig := clientCredentialsConfig
-	antiddosClientConfig.Endpoint = tea.String(fmt.Sprintf("ddoscoo.%s.aliyuncs.com", region))
 	antiddosClient, err := alicloudAntiddosClient.NewClient(antiddosClientConfig)
 
 	if err != nil {
@@ -232,9 +229,22 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud SLB Client
+	slbClientConfig := clientCredentialsConfig
+	slbClient, err := alicloudSlbClient.NewClient(slbClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud SLB API Client",
+			"An unexpected error occurred when creating the AliCloud SLB API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud SLB Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud DNS Client
 	dnsClientConfig := clientCredentialsConfig
-	dnsClientConfig.Endpoint = tea.String("alidns.aliyuncs.com")
 	dnsClient, err := alicloudDnsClient.NewClient(dnsClientConfig)
 
 	if err != nil {
@@ -249,7 +259,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud RAM Client
 	ramClientConfig := clientCredentialsConfig
-	ramClientConfig.Endpoint = tea.String("ram.aliyuncs.com")
 	ramClient, err := alicloudRamClient.NewClient(ramClientConfig)
 
 	if err != nil {
@@ -264,12 +273,12 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
-		baseClient:              baseClient,
-		cdnClient:               cdnClient,
-		antiddosClient:          antiddosClient,
-		dnsClient:               dnsClient,
-		ramClient:               ramClient,
-		clientCredentialsConfig: clientCredentialsConfig,
+		baseClient:     baseClient,
+		cdnClient:      cdnClient,
+		antiddosClient: antiddosClient,
+		slbClient:      slbClient,
+		dnsClient:      dnsClient,
+		ramClient:      ramClient,
 	}
 
 	resp.DataSourceData = alicloudClients

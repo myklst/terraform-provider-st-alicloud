@@ -27,8 +27,9 @@ type ddoscooDomainResourcesDataSource struct {
 }
 
 type ddoscooDomainResourcesDataSourceModel struct {
-	DomainName  types.String `tfsdk:"domain_name"`
-	DomainCName types.String `tfsdk:"domain_cname"`
+	ClientConfig *clientConfig `tfsdk:"client_config"`
+	DomainName   types.String  `tfsdk:"domain_name"`
+	DomainCName  types.String  `tfsdk:"domain_cname"`
 }
 
 func (d *ddoscooDomainResourcesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -48,6 +49,36 @@ func (d *ddoscooDomainResourcesDataSource) Schema(_ context.Context, req datasou
 				Computed:    true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"client_config": schema.SingleNestedBlock{
+				Description: "Config to override default client created in Provider. " +
+					"This block will not be recorded in state file.",
+				Attributes: map[string]schema.Attribute{
+					"region": schema.StringAttribute{
+						Description: "The region of the AntiDDoS. Default to " +
+							"use region configured in the provider.",
+						Optional: true,
+					},
+					"zone": schema.StringAttribute{
+						Description: "This field will be ignored since AntiDDoS " +
+							"do not have zone.",
+						Computed: true,
+					},
+					"access_key": schema.StringAttribute{
+						Description: "The access key that have permissions to list " +
+							"AntiDDoS domain resources. Default to use access key " +
+							"configured in the provider.",
+						Optional: true,
+					},
+					"secret_key": schema.StringAttribute{
+						Description: "The secret key that have permissions to lsit " +
+							"AntiDDoS domain resources. Default to use secret key " +
+							"configured in the provider.",
+						Optional: true,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -65,6 +96,29 @@ func (d *ddoscooDomainResourcesDataSource) Read(ctx context.Context, req datasou
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if plan.ClientConfig == nil {
+		plan.ClientConfig = &clientConfig{}
+	}
+
+	initClient, clientCredentialsConfig, initClientDiags := initNewClient(&d.client.Client, plan.ClientConfig)
+	if initClientDiags.HasError() {
+		resp.Diagnostics.Append(initClientDiags...)
+		return
+	}
+	if initClient {
+		var err error
+		d.client, err = alicloudAntiddosClient.NewClient(clientCredentialsConfig)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to Reinitialize AliCloud AntiDDoS API Client",
+				"An unexpected error occurred when creating the AliCloud AntiDDoS "+
+					"API client. If the error is not clear, please contact the provider "+
+					"developers.\n\nAliCloud AntiDDoS Client Error: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	domainName := plan.DomainName.ValueString()

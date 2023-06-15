@@ -27,9 +27,10 @@ type cdnDomainDataSource struct {
 }
 
 type cdnDomainDataSourceModel struct {
-	DomainName  types.String `tfsdk:"domain_name"`
-	DomainCName types.String `tfsdk:"domain_cname"`
-	Origins     types.List   `tfsdk:"origins"`
+	ClientConfig *clientConfig `tfsdk:"client_config"`
+	DomainName   types.String  `tfsdk:"domain_name"`
+	DomainCName  types.String  `tfsdk:"domain_cname"`
+	Origins      types.List    `tfsdk:"origins"`
 }
 
 func (d *cdnDomainDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -54,6 +55,36 @@ func (d *cdnDomainDataSource) Schema(_ context.Context, req datasource.SchemaReq
 				Computed:    true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"client_config": schema.SingleNestedBlock{
+				Description: "Config to override default client created in Provider. " +
+					"This block will not be recorded in state file.",
+				Attributes: map[string]schema.Attribute{
+					"region": schema.StringAttribute{
+						Description: "The region of the CDN domains. Default to " +
+							"use region configured in the provider.",
+						Optional: true,
+					},
+					"zone": schema.StringAttribute{
+						Description: "This field will be ignored since CDN domains " +
+							"do not have zone.",
+						Computed: true,
+					},
+					"access_key": schema.StringAttribute{
+						Description: "The access key that have permissions to list " +
+							"CDN domains. Default to use access key configured in " +
+							"the provider.",
+						Optional: true,
+					},
+					"secret_key": schema.StringAttribute{
+						Description: "The secret key that have permissions to lsit " +
+							"CDN domains. Default to use secret key configured in " +
+							"the provider.",
+						Optional: true,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -71,6 +102,30 @@ func (d *cdnDomainDataSource) Read(ctx context.Context, req datasource.ReadReque
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if plan.ClientConfig == nil {
+		plan.ClientConfig = &clientConfig{}
+	}
+
+	initClient, clientCredentialsConfig, initClientDiags := initNewClient(&d.client.Client, plan.ClientConfig)
+	if initClientDiags.HasError() {
+		resp.Diagnostics.Append(initClientDiags...)
+		return
+	}
+
+	if initClient {
+		var err error
+		d.client, err = alicloudCdnClient.NewClient(clientCredentialsConfig)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to Reinitialize AliCloud CDN API Client",
+				"An unexpected error occurred when creating the AliCloud CDN API client. "+
+					"If the error is not clear, please contact the provider developers.\n\n"+
+					"AliCloud CDN Client Error: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	domainName := plan.DomainName.ValueString()

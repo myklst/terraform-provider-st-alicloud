@@ -3,6 +3,10 @@ package alicloud
 import (
 	"encoding/json"
 	"strings"
+
+	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
 // Convert the result for an array and returns a Json string
@@ -35,4 +39,63 @@ func convertJsonStringToListString(configured string) ([]string, error) {
 
 func trimStringQuotes(input string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(input, "\""), "\"")
+}
+
+func initNewClient(providerConfig *alicloudOpenapiClient.Client, planConfig *clientConfig) (initClient bool, clientConfig *alicloudOpenapiClient.Config, diag diag.Diagnostics) {
+	var region, accessKey, secretKey string
+	initClient = false
+	clientConfig = &alicloudOpenapiClient.Config{}
+	if !(planConfig.Region.IsUnknown() && planConfig.Region.IsNull() && planConfig.Region.String() == "") {
+		region = planConfig.Region.ValueString()
+		initClient = true
+	}
+	if !(planConfig.AccessKey.IsUnknown() && planConfig.AccessKey.IsNull() && planConfig.AccessKey.String() == "") {
+		accessKey = planConfig.AccessKey.ValueString()
+		initClient = true
+	}
+	if !(planConfig.SecretKey.IsUnknown() && planConfig.SecretKey.IsNull() && planConfig.SecretKey.String() == "") {
+		secretKey = planConfig.SecretKey.ValueString()
+		initClient = true
+	}
+
+	if initClient {
+		if region == "" {
+			region = tea.StringValue(providerConfig.RegionId)
+		}
+		if accessKey == "" {
+			clientAccessKey, err := providerConfig.Credential.GetAccessKeyId()
+			if err != nil {
+				diag.AddError(
+					"Failed to retrieve client Access Key.",
+					"This is an error in provider, please contact the provider developers.\n\n"+
+						"Error: "+err.Error(),
+				)
+			} else {
+				accessKey = tea.StringValue(clientAccessKey)
+			}
+		}
+		if secretKey == "" {
+			clientSecretKey, err := providerConfig.Credential.GetAccessKeySecret()
+			if err != nil {
+				diag.AddError(
+					"Failed to retrieve client Secret Key.",
+					"This is an error in provider, please contact the provider developers.\n\n"+
+						"Error: "+err.Error(),
+				)
+			} else {
+				secretKey = tea.StringValue(clientSecretKey)
+			}
+		}
+		if diag.HasError() {
+			return
+		}
+
+		clientConfig = &alicloudOpenapiClient.Config{
+			RegionId:        &region,
+			AccessKeyId:     &accessKey,
+			AccessKeySecret: &secretKey,
+		}
+	}
+
+	return
 }
