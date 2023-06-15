@@ -25,8 +25,25 @@ data "st-alicloud_ddoscoo_domain_resources" "def" {
 
 - `domain_name` (String) Domain name of AntiDDoS.
 
+### Optional
+
+- `client_config` (Block, Optional) Config to override default client created in Provider. This block will not be recorded in state file. (see [below for nested schema](#nestedblock--client_config))
+
 ### Read-Only
 
 - `domain_cname` (String) Domain CNAME of AntiDDoS.
+
+<a id="nestedblock--client_config"></a>
+### Nested Schema for `client_config`
+
+Optional:
+
+- `access_key` (String) The access key that have permissions to list AntiDDoS domain resources. Default to use access key configured in the provider.
+- `region` (String) The region of the AntiDDoS. Default to use region configured in the provider.
+- `secret_key` (String) The secret key that have permissions to lsit AntiDDoS domain resources. Default to use secret key configured in the provider.
+
+Read-Only:
+
+- `zone` (String) This field will be ignored since AntiDDoS do not have zone.
 
 
