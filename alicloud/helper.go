@@ -45,17 +45,20 @@ func initNewClient(providerConfig *alicloudOpenapiClient.Client, planConfig *cli
 	var region, accessKey, secretKey string
 	initClient = false
 	clientConfig = &alicloudOpenapiClient.Config{}
-	if !(planConfig.Region.IsUnknown() && planConfig.Region.IsNull() && planConfig.Region.String() == "") {
-		region = planConfig.Region.ValueString()
-		initClient = true
+	if !(planConfig.Region.IsUnknown() && planConfig.Region.IsNull()) {
+		if region = planConfig.Region.ValueString(); region != "" {
+			initClient = true
+		}
 	}
-	if !(planConfig.AccessKey.IsUnknown() && planConfig.AccessKey.IsNull() && planConfig.AccessKey.String() == "") {
-		accessKey = planConfig.AccessKey.ValueString()
-		initClient = true
+	if !(planConfig.AccessKey.IsUnknown() && planConfig.AccessKey.IsNull()) {
+		if accessKey = planConfig.AccessKey.ValueString(); accessKey != "" {
+			initClient = true
+		}
 	}
-	if !(planConfig.SecretKey.IsUnknown() && planConfig.SecretKey.IsNull() && planConfig.SecretKey.String() == "") {
-		secretKey = planConfig.SecretKey.ValueString()
-		initClient = true
+	if !(planConfig.SecretKey.IsUnknown() && planConfig.SecretKey.IsNull()) {
+		if secretKey = planConfig.SecretKey.ValueString(); secretKey != "" {
+			initClient = true
+		}
 	}
 
 	if initClient {
