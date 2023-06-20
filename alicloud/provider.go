@@ -306,5 +306,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAliDnsRecordWeightResource,
 		NewAliDnsGtmInstanceResource,
 		NewRamUserGroupAttachmentResource,
+		NewRamPolicyResource,
 	}
 }
