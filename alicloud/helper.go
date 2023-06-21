@@ -42,23 +42,14 @@ func trimStringQuotes(input string) string {
 }
 
 func initNewClient(providerConfig *alicloudOpenapiClient.Client, planConfig *clientConfig) (initClient bool, clientConfig *alicloudOpenapiClient.Config, diag diag.Diagnostics) {
-	var region, accessKey, secretKey string
 	initClient = false
 	clientConfig = &alicloudOpenapiClient.Config{}
-	if !(planConfig.Region.IsUnknown() && planConfig.Region.IsNull()) {
-		if region = planConfig.Region.ValueString(); region != "" {
-			initClient = true
-		}
-	}
-	if !(planConfig.AccessKey.IsUnknown() && planConfig.AccessKey.IsNull()) {
-		if accessKey = planConfig.AccessKey.ValueString(); accessKey != "" {
-			initClient = true
-		}
-	}
-	if !(planConfig.SecretKey.IsUnknown() && planConfig.SecretKey.IsNull()) {
-		if secretKey = planConfig.SecretKey.ValueString(); secretKey != "" {
-			initClient = true
-		}
+	region := planConfig.Region.ValueString()
+	accessKey := planConfig.AccessKey.ValueString()
+	secretKey := planConfig.SecretKey.ValueString()
+
+	if region != "" || accessKey != "" || secretKey != "" {
+		initClient = true
 	}
 
 	if initClient {

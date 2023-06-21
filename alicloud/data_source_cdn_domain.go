@@ -65,11 +65,6 @@ func (d *cdnDomainDataSource) Schema(_ context.Context, req datasource.SchemaReq
 							"use region configured in the provider.",
 						Optional: true,
 					},
-					"zone": schema.StringAttribute{
-						Description: "This field will be ignored since CDN domains " +
-							"do not have zone.",
-						Computed: true,
-					},
 					"access_key": schema.StringAttribute{
 						Description: "The access key that have permissions to list " +
 							"CDN domains. Default to use access key configured in " +

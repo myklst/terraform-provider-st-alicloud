@@ -28,7 +28,7 @@ type slbLoadBalancersDataSource struct {
 }
 
 type slbLoadBalancersDataSourceModel struct {
-	ClientConfig  *clientConfig             `tfsdk:"client_config"`
+	ClientConfig  *clientConfigWithZone     `tfsdk:"client_config"`
 	Name          types.String              `tfsdk:"name"`
 	Tags          types.Map                 `tfsdk:"tags"`
 	LoadBalancers []*slbLoadBalancersDetail `tfsdk:"load_balancers"`
@@ -136,10 +136,10 @@ func (d *slbLoadBalancersDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	if plan.ClientConfig == nil {
-		plan.ClientConfig = &clientConfig{}
+		plan.ClientConfig = &clientConfigWithZone{}
 	}
 
-	initClient, clientCredentialsConfig, initClientDiags := initNewClient(&d.client.Client, plan.ClientConfig)
+	initClient, clientCredentialsConfig, initClientDiags := initNewClient(&d.client.Client, plan.ClientConfig.getClientConfig())
 	if initClientDiags.HasError() {
 		resp.Diagnostics.Append(initClientDiags...)
 		return
