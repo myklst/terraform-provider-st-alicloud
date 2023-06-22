@@ -423,14 +423,14 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 
 	tempDocument := plan.PolicyDocument.ValueString()
 	tempDocument = strings.TrimSpace(tempDocument)
-	tempDocument = strings.TrimPrefix(tempDocument, "{")
+	tempDocument = strings.TrimPrefix(tempDocument, "[")
 
 	lastChar := tempDocument[len(tempDocument)-2]
 
 	if lastChar == ',' {
-		tempDocument = strings.TrimSuffix(tempDocument, ",}")
+		tempDocument = strings.TrimSuffix(tempDocument, ",]")
 	} else {
-		tempDocument = strings.TrimSuffix(tempDocument, "}")
+		tempDocument = strings.TrimSuffix(tempDocument, "]")
 	}
 
 	policyList := strings.Split(tempDocument, ",")
