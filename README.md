@@ -70,6 +70,12 @@ scenario. The reason behind every resources and data sources are stated as below
   will remove all other attached users for the target group, which may cause a
   problem where Terraform may delete those users attached outside from Terraform.
 
+- **st-alicloud_ram_policy**
+
+  This resource is designed to handle policy content that exceeds the limit of 6144 characters.
+  It provides functionality to create policies by splitting the content into smaller segments that fit within the limit,
+  enabling the management and combination of these segments to form the complete policy.
+
 ### Data Sources
 
 - **st-alicloud_ddoscoo_domain_resources**
