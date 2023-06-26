@@ -48,9 +48,6 @@ type policyDetail struct {
 	PolicyDocument types.String `tfsdk:"policy_document"`
 }
 
-var resp2 *resource.CreateResponse
-var resp3 *resource.ReadResponse
-
 func (r *ramPolicyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ram_policy"
 }
@@ -103,7 +100,6 @@ func (r *ramPolicyResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	resp2 = resp
 	var plan *ramPolicyResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
