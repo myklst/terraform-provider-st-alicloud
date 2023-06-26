@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     st-alicloud = {
-      source = "example.local/myklst/st-alicloud"
+      source = "myklst/st-alicloud"
     }
   }
 }
