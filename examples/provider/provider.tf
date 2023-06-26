@@ -1,11 +1,11 @@
 terraform {
   required_providers {
     st-alicloud = {
-      source = "myklst/st-alicloud"
+      source = "example.local/myklst/st-alicloud"
     }
   }
 }
 
 provider "st-alicloud" {
-  region = "cn-hongkong"
+  region     = "cn-hongkong"
 }

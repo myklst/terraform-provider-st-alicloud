@@ -40,6 +40,7 @@ type ramPolicyResourceModel struct {
 	PolicyType     types.String `tfsdk:"policy_type"`
 	PolicyDocument types.String `tfsdk:"policy_document"`
 	Policies       types.List   `tfsdk:"policies"`
+	UserName       types.String `tfsdk:"user_name"`
 }
 
 type policyDetail struct {
@@ -48,6 +49,7 @@ type policyDetail struct {
 }
 
 var resp2 *resource.CreateResponse
+var resp3 *resource.ReadResponse
 
 func (r *ramPolicyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ram_policy"
@@ -85,6 +87,10 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					},
 				},
 			},
+			"user_name": schema.StringAttribute{
+				Description: "The name of the RAM user that attached to the policy.",
+				Required:    true,
+			},
 		},
 	}
 }
@@ -105,8 +111,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	state := &ramPolicyResourceModel{}
-
 	policy, err := r.createPolicy(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -116,25 +120,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	var policiesList []attr.Value
-
-	for i, policies := range policy {
-		policyName := plan.PolicyName.ValueString() + "-" + strconv.Itoa(i+1)
-
-		policyObj := types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policyName),
-				"policy_document": types.StringValue(policies),
-			},
-		)
-
-		policiesList = append(policiesList, policyObj)
-	}
-
+	state := &ramPolicyResourceModel{}
 	state.PolicyName = plan.PolicyName
 	state.PolicyType = plan.PolicyType
 	state.PolicyDocument = plan.PolicyDocument
@@ -145,8 +131,17 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 				"policy_document": types.StringType,
 			},
 		},
-		policiesList,
+		policy,
 	)
+	state.UserName = plan.UserName
+
+	if err := r.attachPolicyToUser(state); err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Attach Policy to User.",
+			err.Error(),
+		)
+		return
+	}
 
 	readPolicyDiags := r.readPolicy(state)
 	resp.Diagnostics.Append(readPolicyDiags...)
@@ -172,6 +167,39 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	readPolicyDiags := r.readPolicy(state)
 	resp.Diagnostics.Append(readPolicyDiags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	listPoliciesForUser := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		listPoliciesForUserRequest := &alicloudRamClient.ListPoliciesForUserRequest{
+			UserName: tea.String(state.UserName.ValueString()),
+		}
+
+		_, err := r.client.ListPoliciesForUserWithOptions(listPoliciesForUserRequest, runtime)
+		if err != nil {
+			if _t, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return err
+				} else {
+					return backoff.Permanent(err)
+				}
+			} else {
+				return err
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err := backoff.Retry(listPoliciesForUser, reconnectBackoff)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Read Users for Group",
+			err.Error(),
+		)
 		return
 	}
 
@@ -211,25 +239,6 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	var policiesList []attr.Value
-
-	for i, policies := range policy {
-		policyName := plan.PolicyName.ValueString() + "-" + strconv.Itoa(i+1)
-
-		policyObj := types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policyName),
-				"policy_document": types.StringValue(policies),
-			},
-		)
-
-		policiesList = append(policiesList, policyObj)
-	}
-
 	state.PolicyName = plan.PolicyName
 	state.PolicyType = plan.PolicyType
 	state.PolicyDocument = plan.PolicyDocument
@@ -240,8 +249,17 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 				"policy_document": types.StringType,
 			},
 		},
-		policiesList,
+		policy,
 	)
+	state.UserName = plan.UserName
+
+	if err := r.attachPolicyToUser(state); err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Attach Policy to User.",
+			err.Error(),
+		)
+		return
+	}
 
 	readPolicyDiags := r.readPolicy(state)
 	resp.Diagnostics.Append(readPolicyDiags...)
@@ -271,8 +289,8 @@ func (r *ramPolicyResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 }
 
-func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (formattedPolicy []string, err error) {
-	formattedPolicy = r.getPolicyDocument(plan)
+func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []attr.Value, err error) {
+	formattedPolicy := r.getPolicyDocument(plan)
 
 	createPolicy := func() error {
 		runtime := &util.RuntimeOptions{}
@@ -297,12 +315,30 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (formatte
 				}
 			}
 		}
+
 		return nil
+	}
+
+	for i, policies := range formattedPolicy {
+		policyName := plan.PolicyName.ValueString() + "-" + strconv.Itoa(i+1)
+
+		policyObj := types.ObjectValueMust(
+			map[string]attr.Type{
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
+			},
+			map[string]attr.Value{
+				"policy_name":     types.StringValue(policyName),
+				"policy_document": types.StringValue(policies),
+			},
+		)
+
+		policiesList = append(policiesList, policyObj)
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	return formattedPolicy, backoff.Retry(createPolicy, reconnectBackoff)
+	return policiesList, backoff.Retry(createPolicy, reconnectBackoff)
 }
 
 func (r *ramPolicyResource) readPolicy(plan *ramPolicyResourceModel) diag.Diagnostics {
@@ -318,10 +354,7 @@ func (r *ramPolicyResource) readPolicy(plan *ramPolicyResourceModel) diag.Diagno
 		data := make(map[string]string)
 
 		for _, policies := range state.Policies.Elements() {
-			err := json.Unmarshal([]byte(policies.String()), &data)
-			if err != nil {
-				return err
-			}
+			json.Unmarshal([]byte(policies.String()), &data)
 
 			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
 				PolicyName: tea.String(data["policy_name"]),
@@ -394,12 +427,28 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 	data := make(map[string]string)
 
 	for _, policies := range state.Policies.Elements() {
+		runtime := &util.RuntimeOptions{}
+
 		json.Unmarshal([]byte(policies.String()), &data)
+
+		detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
+			PolicyType: tea.String(state.PolicyType.ValueString()),
+			PolicyName: tea.String(data["policy_name"]),
+			UserName:   tea.String(state.UserName.ValueString()),
+		}
+
 		deletePolicyRequest := &alicloudRamClient.DeletePolicyRequest{
 			PolicyName: tea.String(data["policy_name"]),
 		}
 
-		runtime := &util.RuntimeOptions{}
+		if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
+			return diag.Diagnostics{
+				diag.NewErrorDiagnostic(
+					"[API ERROR] Failed to Detach Policy from User.",
+					err.Error(),
+				),
+			}
+		}
 
 		if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
 			return diag.Diagnostics{
@@ -415,11 +464,11 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 
 func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []string {
 	currentLength := 0
+	currentPolicyDocument := ""
 	appendedPolicyDocument := make([]string, 0)
 	finalPolicyDocument := make([]string, 0)
 
 	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
-	currentPolicyDocument := ""
 
 	tempDocument := plan.PolicyDocument.ValueString()
 	tempDocument = strings.TrimSpace(tempDocument)
@@ -444,7 +493,6 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 		runtime := &util.RuntimeOptions{}
 
 		for i, policy := range policyList {
-
 			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
 				PolicyType: tea.String("Custom"),
 				PolicyName: tea.String(policy),
@@ -482,6 +530,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 			removeSpaces := strings.ReplaceAll(string(statementBytes), " ", "")
 			replacer := strings.NewReplacer("\n", "")
 			removeParagraphs := replacer.Replace(removeSpaces)
+
 			finalStatement := strings.Trim(removeParagraphs, "[]")
 
 			currentLength += len(finalStatement)
@@ -521,4 +570,38 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 	}
 
 	return finalPolicyDocument
+}
+
+func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (err error) {
+	data := make(map[string]string)
+
+	attachPolicyToUser := func() error {
+		for _, policies := range state.Policies.Elements() {
+			json.Unmarshal([]byte(policies.String()), &data)
+
+			attachPolicyToUserRequest := &alicloudRamClient.AttachPolicyToUserRequest{
+				PolicyType: tea.String(state.PolicyType.ValueString()),
+				PolicyName: tea.String(data["policy_name"]),
+				UserName:   tea.String(state.UserName.ValueString()),
+			}
+
+			runtime := &util.RuntimeOptions{}
+			if _, err := r.client.AttachPolicyToUserWithOptions(attachPolicyToUserRequest, runtime); err != nil {
+				if _t, ok := err.(*tea.SDKError); ok {
+					if isAbleToRetry(*_t.Code) {
+						return err
+					} else {
+						return backoff.Permanent(err)
+					}
+				} else {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	return backoff.Retry(attachPolicyToUser, reconnectBackoff)
 }
