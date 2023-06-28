@@ -38,7 +38,7 @@ type ramPolicyResource struct {
 type ramPolicyResourceModel struct {
 	PolicyName     types.String `tfsdk:"policy_name"`
 	PolicyType     types.String `tfsdk:"policy_type"`
-	PolicyDocument types.String `tfsdk:"policy_document"`
+	PolicyDocument types.List   `tfsdk:"policy_document"`
 	Policies       types.List   `tfsdk:"policies"`
 	UserName       types.String `tfsdk:"user_name"`
 }
@@ -64,9 +64,10 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "The policy type.",
 				Required:    true,
 			},
-			"policy_document": schema.StringAttribute{
+			"policy_document": schema.ListAttribute{
 				Description: "The policy document of the RAM policy.",
 				Required:    true,
+				ElementType: types.StringType,
 			},
 			"policies": schema.ListNestedAttribute{
 				Description: "A list of policies.",
@@ -466,38 +467,18 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 
 	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 
-	tempDocument := plan.PolicyDocument.ValueString()
-	tempDocument = strings.TrimSpace(tempDocument)
-	tempDocument = strings.TrimPrefix(tempDocument, "[")
-
-	lastChar := tempDocument[len(tempDocument)-2]
-
-	if lastChar == ',' {
-		tempDocument = strings.TrimSuffix(tempDocument, ",]")
-	} else {
-		tempDocument = strings.TrimSuffix(tempDocument, "]")
-	}
-
-	policyList := strings.Split(tempDocument, ",")
-
-	for i, policy := range policyList {
-		policyList[i] = strings.TrimSpace(policy)
-		policyList[i] = strings.Trim(policyList[i], "\"")
-	}
-
 	getPolicy := func() error {
 		runtime := &util.RuntimeOptions{}
 
-		for i, policy := range policyList {
+		for i, policy := range plan.PolicyDocument.Elements() {
 			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-				PolicyType: tea.String("Custom"),
-				PolicyName: tea.String(policy),
+				PolicyType: tea.String(plan.PolicyType.ValueString()),
+				PolicyName: tea.String(trimStringQuotes(policy.String())),
 			}
 
 			for {
 				var err error
 				getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-
 				if err != nil {
 					if *getPolicyRequest.PolicyType == "System" {
 						return backoff.Permanent(err)
@@ -544,7 +525,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) []st
 				currentPolicyDocument += finalStatement + ","
 			}
 
-			if i == len(policyList)-1 && (currentLength+30) <= maxLength {
+			if i == len(plan.PolicyDocument.Elements())-1 && (currentLength+30) <= maxLength {
 				lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
 				if lastCommaIndex >= 0 {
 					currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
