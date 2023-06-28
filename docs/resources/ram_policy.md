@@ -14,9 +14,9 @@ Provides a RAM Policy resource.
 
 ```terraform
 resource "st-alicloud_ram_policy" "ram_policy" {
- policy_name     = "test-policy"
+  policy_name     = "test-policy"
   policy_type     = "Custom"
-  policy_document = "[\"AliyunECSFullAccess\",\"AliyunRAMFullAccess\",\"AliyunOSSFullAccess\",\"AliyunOTSFullAccess\"]"
+  policy_document = ["AliyunECSFullAccess","AliyunRAMFullAccess","AliyunOSSFullAccess","AliyunOTSFullAccess",]
   user_name       = "devopsuser01"
 }
 ```
@@ -26,7 +26,7 @@ resource "st-alicloud_ram_policy" "ram_policy" {
 
 ### Required
 
-- `policy_document` (String) The policy document of the RAM policy.
+- `policy_document` (List of String) The policy document of the RAM policy.
 - `policy_name` (String) The policy name.
 - `policy_type` (String) The policy type.
 - `user_name` (String) The name of the RAM user that attached to the policy.
