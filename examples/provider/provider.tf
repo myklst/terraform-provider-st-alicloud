@@ -7,5 +7,5 @@ terraform {
 }
 
 provider "st-alicloud" {
-  region     = "cn-hongkong"
+  region = "cn-hongkong"
 }

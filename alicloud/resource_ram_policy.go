@@ -37,7 +37,6 @@ type ramPolicyResource struct {
 
 type ramPolicyResourceModel struct {
 	PolicyName       types.String `tfsdk:"policy_name"`
-	PolicyType       types.String `tfsdk:"policy_type"`
 	AttachedPolicies types.List   `tfsdk:"attached_policies"`
 	Policies         types.List   `tfsdk:"policies"`
 	UserName         types.String `tfsdk:"user_name"`
@@ -58,10 +57,6 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"policy_name": schema.StringAttribute{
 				Description: "The policy name.",
-				Required:    true,
-			},
-			"policy_type": schema.StringAttribute{
-				Description: "The policy type.",
 				Required:    true,
 			},
 			"attached_policies": schema.ListAttribute{
@@ -119,7 +114,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 
 	state := &ramPolicyResourceModel{}
 	state.PolicyName = plan.PolicyName
-	state.PolicyType = plan.PolicyType
 	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
@@ -237,7 +231,6 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	state.PolicyName = plan.PolicyName
-	state.PolicyType = plan.PolicyType
 	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
@@ -429,7 +422,7 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 		json.Unmarshal([]byte(policies.String()), &data)
 
 		detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
-			PolicyType: tea.String(state.PolicyType.ValueString()),
+			PolicyType: tea.String("Custom"),
 			PolicyName: tea.String(data["policy_name"]),
 			UserName:   tea.String(state.UserName.ValueString()),
 		}
@@ -469,7 +462,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 
 	for i, policy := range plan.AttachedPolicies.Elements() {
 		getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-			PolicyType: tea.String(plan.PolicyType.ValueString()),
+			PolicyType: tea.String("Custom"),
 			PolicyName: tea.String(trimStringQuotes(policy.String())),
 		}
 
@@ -525,7 +518,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 
 		// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
 		// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
-		if (currentLength + 30) > 300 {
+		if (currentLength + 30) > maxLength {
 			lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
 			if lastCommaIndex >= 0 {
 				currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
@@ -562,7 +555,7 @@ func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (e
 			json.Unmarshal([]byte(policies.String()), &data)
 
 			attachPolicyToUserRequest := &alicloudRamClient.AttachPolicyToUserRequest{
-				PolicyType: tea.String(state.PolicyType.ValueString()),
+				PolicyType: tea.String("Custom"),
 				PolicyName: tea.String(data["policy_name"]),
 				UserName:   tea.String(state.UserName.ValueString()),
 			}
