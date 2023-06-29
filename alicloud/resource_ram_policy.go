@@ -36,7 +36,6 @@ type ramPolicyResource struct {
 }
 
 type ramPolicyResourceModel struct {
-	PolicyName       types.String `tfsdk:"policy_name"`
 	AttachedPolicies types.List   `tfsdk:"attached_policies"`
 	Policies         types.List   `tfsdk:"policies"`
 	UserName         types.String `tfsdk:"user_name"`
@@ -55,10 +54,6 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "Provides a RAM Policy resource that manages policy content exceeding character limits by splitting it into smaller segments. These segments are combined to form a complete policy attached to the user.",
 		Attributes: map[string]schema.Attribute{
-			"policy_name": schema.StringAttribute{
-				Description: "The policy name.",
-				Required:    true,
-			},
 			"attached_policies": schema.ListAttribute{
 				Description: "The RAM policies to attach to the user.",
 				Required:    true,
@@ -113,7 +108,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	state := &ramPolicyResourceModel{}
-	state.PolicyName = plan.PolicyName
 	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
@@ -230,7 +224,6 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	state.PolicyName = plan.PolicyName
 	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
@@ -289,7 +282,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 		runtime := &util.RuntimeOptions{}
 
 		for i, policy := range formattedPolicy {
-			policyName := plan.PolicyName.ValueString() + "-" + strconv.Itoa(i+1)
+			policyName := plan.UserName.ValueString() + "-" + strconv.Itoa(i+1)
 
 			createPolicyRequest := &alicloudRamClient.CreatePolicyRequest{
 				PolicyName:     tea.String(policyName),
@@ -313,7 +306,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 	}
 
 	for i, policies := range formattedPolicy {
-		policyName := plan.PolicyName.ValueString() + "-" + strconv.Itoa(i+1)
+		policyName := plan.UserName.ValueString() + "-" + strconv.Itoa(i+1)
 
 		policyObj := types.ObjectValueMust(
 			map[string]attr.Type{
@@ -335,6 +328,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 }
 
 func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
+	policyDetailsState := []*policyDetail{}
 	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
 
 	var err error
@@ -363,6 +357,14 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 					return err
 				}
 			}
+
+			if getPolicyResponse.Body.Policy != nil {
+				policyDetail := policyDetail{
+					PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+					PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+				}
+				policyDetailsState = append(policyDetailsState, &policyDetail)
+			}
 		}
 		return nil
 	}
@@ -379,15 +381,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 		}
 	}
 
-	policyDetailsState := []*policyDetail{}
-	if getPolicyResponse.Body.Policy != nil {
-		policyDetail := policyDetail{
-			PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-			PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
-		}
-		policyDetailsState = append(policyDetailsState, &policyDetail)
-	}
-
+	state = &ramPolicyResourceModel{}
 	for _, policy := range policyDetailsState {
 		state.Policies = types.ListValueMust(
 			types.ObjectType{
@@ -410,6 +404,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 			},
 		)
 	}
+
 	return nil
 }
 
