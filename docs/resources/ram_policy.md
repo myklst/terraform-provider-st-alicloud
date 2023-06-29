@@ -3,21 +3,21 @@
 page_title: "st-alicloud_ram_policy Resource - st-alicloud"
 subcategory: ""
 description: |-
-  Provides a RAM Policy resource.
+  Provides a RAM Policy resource that manages policy content exceeding character limits by splitting it into smaller segments. These segments are combined to form a complete policy attached to the user.
 ---
 
 # st-alicloud_ram_policy (Resource)
 
-Provides a RAM Policy resource.
+Provides a RAM Policy resource that manages policy content exceeding character limits by splitting it into smaller segments. These segments are combined to form a complete policy attached to the user.
 
 ## Example Usage
 
 ```terraform
 resource "st-alicloud_ram_policy" "ram_policy" {
-  policy_name     = "test-policy"
-  policy_type     = "Custom"
-  policy_document = ["AliyunECSFullAccess","AliyunRAMFullAccess","AliyunOSSFullAccess","AliyunOTSFullAccess",]
-  user_name       = "devopsuser01"
+  policy_name       = "test-policy"
+  policy_type       = "Custom"
+  attached_policies = ["AliyunECSFullAccess", "AliyunRAMFullAccess", "AliyunOSSFullAccess", "AliyunOTSFullAccess", ]
+  user_name         = "devopsuser01"
 }
 ```
 
@@ -26,7 +26,7 @@ resource "st-alicloud_ram_policy" "ram_policy" {
 
 ### Required
 
-- `policy_document` (List of String) The policy document of the RAM policy.
+- `attached_policies` (List of String) The RAM policies to attach to the user.
 - `policy_name` (String) The policy name.
 - `policy_type` (String) The policy type.
 - `user_name` (String) The name of the RAM user that attached to the policy.

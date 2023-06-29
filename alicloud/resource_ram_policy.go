@@ -36,11 +36,11 @@ type ramPolicyResource struct {
 }
 
 type ramPolicyResourceModel struct {
-	PolicyName     types.String `tfsdk:"policy_name"`
-	PolicyType     types.String `tfsdk:"policy_type"`
-	AttachedPolicy types.List   `tfsdk:"attached_policy"`
-	Policies       types.List   `tfsdk:"policies"`
-	UserName       types.String `tfsdk:"user_name"`
+	PolicyName       types.String `tfsdk:"policy_name"`
+	PolicyType       types.String `tfsdk:"policy_type"`
+	AttachedPolicies types.List   `tfsdk:"attached_policies"`
+	Policies         types.List   `tfsdk:"policies"`
+	UserName         types.String `tfsdk:"user_name"`
 }
 
 type policyDetail struct {
@@ -54,7 +54,7 @@ func (r *ramPolicyResource) Metadata(_ context.Context, req resource.MetadataReq
 
 func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Provides a RAM Policy resource.",
+		Description: "Provides a RAM Policy resource that manages policy content exceeding character limits by splitting it into smaller segments. These segments are combined to form a complete policy attached to the user.",
 		Attributes: map[string]schema.Attribute{
 			"policy_name": schema.StringAttribute{
 				Description: "The policy name.",
@@ -64,8 +64,8 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "The policy type.",
 				Required:    true,
 			},
-			"attached_policy": schema.ListAttribute{
-				Description: "The policy document of the RAM policy.",
+			"attached_policies": schema.ListAttribute{
+				Description: "The RAM policies to attach to the user.",
 				Required:    true,
 				ElementType: types.StringType,
 			},
@@ -120,7 +120,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	state := &ramPolicyResourceModel{}
 	state.PolicyName = plan.PolicyName
 	state.PolicyType = plan.PolicyType
-	state.AttachedPolicy = plan.AttachedPolicy
+	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
@@ -238,7 +238,7 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	state.PolicyName = plan.PolicyName
 	state.PolicyType = plan.PolicyType
-	state.AttachedPolicy = plan.AttachedPolicy
+	state.AttachedPolicies = plan.AttachedPolicies
 	state.Policies = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
@@ -341,11 +341,8 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 	return policiesList, backoff.Retry(createPolicy, reconnectBackoff)
 }
 
-func (r *ramPolicyResource) readPolicy(plan *ramPolicyResourceModel) diag.Diagnostics {
+func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
 	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
-
-	state := &ramPolicyResourceModel{}
-	state.Policies = plan.Policies
 
 	var err error
 	getPolicy := func() error {
@@ -470,7 +467,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 
 	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 
-	for i, policy := range plan.AttachedPolicy.Elements() {
+	for i, policy := range plan.AttachedPolicies.Elements() {
 		getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
 			PolicyType: tea.String(plan.PolicyType.ValueString()),
 			PolicyName: tea.String(trimStringQuotes(policy.String())),
@@ -541,7 +538,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 			currentPolicyDocument += finalStatement + ","
 		}
 
-		if i == len(plan.AttachedPolicy.Elements())-1 && (currentLength+30) <= maxLength {
+		if i == len(plan.AttachedPolicies.Elements())-1 && (currentLength+30) <= maxLength {
 			lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
 			if lastCommaIndex >= 0 {
 				currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]

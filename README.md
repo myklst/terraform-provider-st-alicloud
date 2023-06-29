@@ -74,7 +74,7 @@ scenario. The reason behind every resources and data sources are stated as below
 
   This resource is designed to handle policy content that exceeds the limit of 6144 characters.
   It provides functionality to create policies by splitting the content into smaller segments that fit within the limit,
-  enabling the management and combination of these segments to form the complete policy.
+  enabling the management and combination of these segments to form the complete policy. Finally, the policy will be attached to the relevant user.
 
 ### Data Sources
 
