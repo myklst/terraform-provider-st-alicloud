@@ -15,7 +15,6 @@ Provides a RAM Policy resource that manages policy content exceeding character l
 ```terraform
 resource "st-alicloud_ram_policy" "ram_policy" {
   policy_name       = "test-policy"
-  policy_type       = "Custom"
   attached_policies = ["AliyunECSFullAccess", "AliyunRAMFullAccess", "AliyunOSSFullAccess", "AliyunOTSFullAccess", ]
   user_name         = "devopsuser01"
 }
@@ -28,7 +27,6 @@ resource "st-alicloud_ram_policy" "ram_policy" {
 
 - `attached_policies` (List of String) The RAM policies to attach to the user.
 - `policy_name` (String) The policy name.
-- `policy_type` (String) The policy type.
 - `user_name` (String) The name of the RAM user that attached to the policy.
 
 ### Read-Only
