@@ -24,8 +24,9 @@ import (
 const maxLength = 6144
 
 var (
-	_ resource.Resource              = &ramPolicyResource{}
-	_ resource.ResourceWithConfigure = &ramPolicyResource{}
+	_ resource.Resource                = &ramPolicyResource{}
+	_ resource.ResourceWithConfigure   = &ramPolicyResource{}
+	_ resource.ResourceWithImportState = &ramPolicyResource{}
 )
 
 func NewRamPolicyResource() resource.Resource {
@@ -165,15 +166,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 		_, err := r.client.ListPoliciesForUserWithOptions(listPoliciesForUserRequest, runtime)
 		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
+			handleAPIError(err)
 		}
 		return nil
 	}
@@ -274,7 +267,85 @@ func (r *ramPolicyResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	policyDetailsState := []*policyDetail{}
+	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
+	policyNames := strings.Split(req.ID, ",")
+	var username string
+
+	var err error
+	getPolicy := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		for _, policyName := range policyNames {
+			policyName = strings.ReplaceAll(policyName, " ", "")
+
+			// Retrieves the policy document for the policy
+			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
+				PolicyName: tea.String(policyName),
+				PolicyType: tea.String("Custom"),
+			}
+
+			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+			if err != nil {
+				handleAPIError(err)
+			}
+
+			// Retrieves the name of the user attached to the policy.
+			listEntitiesForPolicy := &alicloudRamClient.ListEntitiesForPolicyRequest{
+				PolicyName: tea.String(policyName),
+				PolicyType: tea.String("Custom"),
+			}
+
+			getPolicyEntities, err := r.client.ListEntitiesForPolicyWithOptions(listEntitiesForPolicy, runtime)
+			if err != nil {
+				handleAPIError(err)
+			}
+
+			if getPolicyResponse.Body.Policy != nil {
+				policyDetail := policyDetail{
+					PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+					PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+				}
+				policyDetailsState = append(policyDetailsState, &policyDetail)
+			}
+
+			if getPolicyEntities.Body.Users != nil {
+				for _, user := range getPolicyEntities.Body.Users.User {
+					username = *user.UserName
+				}
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(getPolicy, reconnectBackoff)
+	if err != nil {
+		return
+	}
+
+	var policyList []policyDetail
+	for _, policy := range policyDetailsState {
+		policies := policyDetail{
+			PolicyName:     types.StringValue(policy.PolicyName.ValueString()),
+			PolicyDocument: types.StringValue(policy.PolicyDocument.ValueString()),
+		}
+
+		policyList = append(policyList, policies)
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user_name"), username)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("policies"), policyList)...)
+
+	if !resp.Diagnostics.HasError() {
+		resp.Diagnostics.AddWarning(
+			"Unable to Set the attached_policies Attribute",
+			"After running terraform import, Terraform will not automatically set the attached_policies attributes."+
+				"To ensure that all attributes defined in the Terraform configuration are set, you need to run terraform apply."+
+				"This command will apply the changes and set the desired attributes according to your configuration.",
+		)
+	}
 }
 
 func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []attr.Value, err error) {
@@ -295,15 +366,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 			}
 
 			if _, err := r.client.CreatePolicyWithOptions(createPolicyRequest, runtime); err != nil {
-				if _t, ok := err.(*tea.SDKError); ok {
-					if isAbleToRetry(*_t.Code) {
-						return err
-					} else {
-						return backoff.Permanent(err)
-					}
-				} else {
-					return err
-				}
+				handleAPIError(err)
 			}
 		}
 
@@ -352,15 +415,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 
 			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
 			if err != nil {
-				if _t, ok := err.(*tea.SDKError); ok {
-					if isAbleToRetry(*_t.Code) {
-						return err
-					} else {
-						return backoff.Permanent(err)
-					}
-				} else {
-					return err
-				}
+				handleAPIError(err)
 			}
 
 			if getPolicyResponse.Body.Policy != nil {
@@ -416,39 +471,46 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics {
 	data := make(map[string]string)
 
-	for _, policies := range state.Policies.Elements() {
-		runtime := &util.RuntimeOptions{}
+	removePolicy := func() error {
+		for _, policies := range state.Policies.Elements() {
+			runtime := &util.RuntimeOptions{}
 
-		json.Unmarshal([]byte(policies.String()), &data)
+			json.Unmarshal([]byte(policies.String()), &data)
 
-		detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
-			PolicyType: tea.String("Custom"),
-			PolicyName: tea.String(data["policy_name"]),
-			UserName:   tea.String(state.UserName.ValueString()),
-		}
+			detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
+				PolicyType: tea.String("Custom"),
+				PolicyName: tea.String(data["policy_name"]),
+				UserName:   tea.String(state.UserName.ValueString()),
+			}
 
-		deletePolicyRequest := &alicloudRamClient.DeletePolicyRequest{
-			PolicyName: tea.String(data["policy_name"]),
-		}
+			deletePolicyRequest := &alicloudRamClient.DeletePolicyRequest{
+				PolicyName: tea.String(data["policy_name"]),
+			}
 
-		if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
-			return diag.Diagnostics{
-				diag.NewErrorDiagnostic(
-					"[API ERROR] Failed to Detach Policy from User.",
-					err.Error(),
-				),
+			if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
+				handleAPIError(err)
+			}
+
+			if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
+				handleAPIError(err)
 			}
 		}
 
-		if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
-			return diag.Diagnostics{
-				diag.NewErrorDiagnostic(
-					"[API ERROR] Failed to Delete Policy.",
-					err.Error(),
-				),
-			}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err := backoff.Retry(removePolicy, reconnectBackoff)
+	if err != nil {
+		return diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"[API ERROR] Failed to Delete Policy",
+				err.Error(),
+			),
 		}
 	}
+
 	return nil
 }
 
@@ -562,15 +624,7 @@ func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (e
 
 			runtime := &util.RuntimeOptions{}
 			if _, err := r.client.AttachPolicyToUserWithOptions(attachPolicyToUserRequest, runtime); err != nil {
-				if _t, ok := err.(*tea.SDKError); ok {
-					if isAbleToRetry(*_t.Code) {
-						return err
-					} else {
-						return backoff.Permanent(err)
-					}
-				} else {
-					return err
-				}
+				handleAPIError(err)
 			}
 		}
 		return nil
@@ -579,4 +633,16 @@ func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (e
 	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
 	return backoff.Retry(attachPolicyToUser, reconnectBackoff)
+}
+
+func handleAPIError(err error) error {
+	if _t, ok := err.(*tea.SDKError); ok {
+		if isAbleToRetry(*_t.Code) {
+			return err
+		} else {
+			return backoff.Permanent(err)
+		}
+	} else {
+		return err
+	}
 }
