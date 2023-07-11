@@ -76,6 +76,11 @@ scenario. The reason behind every resources and data sources are stated as below
   It provides functionality to create policies by splitting the content into smaller segments that fit within the limit,
   enabling the management and combination of these segments to form the complete policy. Finally, the policy will be attached to the relevant user.
 
+- **st-alicloud_cms_system_event_group_binding**
+
+  The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
+  This may cause system event rule could create as usual but with an empty target contact group.
+
 ### Data Sources
 
 - **st-alicloud_ddoscoo_domain_resources**
