@@ -119,8 +119,15 @@ func (r *cmsSystemEventGroupBindingResource) Read(ctx context.Context, req resou
 			}
 		}
 
-		for _, contactGroup := range readSystemEventGroupResponse.Body.ContactParameters.ContactParameter {
-			state.ContactGroupName = types.StringValue(*contactGroup.ContactGroupName)
+		if readSystemEventGroupResponse.Body.ContactParameters != nil {
+			for _, contactGroup := range readSystemEventGroupResponse.Body.ContactParameters.ContactParameter {
+				state.ContactGroupName = types.StringValue(*contactGroup.ContactGroupName)
+				state.Level = types.StringValue(*contactGroup.Level)
+			}
+		} else {
+			state.RuleName = types.StringNull()
+			state.ContactGroupName = types.StringNull()
+			state.Level = types.StringNull()
 		}
 
 		return nil
