@@ -299,7 +299,7 @@ func (d *ddoscooInstancesDataSource) Read(ctx context.Context, req datasource.Re
 
 	// Retry backoff
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 60 * time.Second
 
 	err := backoff.Retry(readInstances, reconnectBackoff)
 	if err != nil {
