@@ -202,7 +202,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 		}
 
 		totalRules, _ := strconv.ParseInt(*alarmRuleResponse.Body.Total, 10, 64)
-		if totalRules > int64(0) {
+		if totalRules > 0 {
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
@@ -281,11 +281,9 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	var ruleUUID string
+	ruleUUID := state.RuleId.ValueString()
 	if state.RuleId == types.StringNull() {
 		ruleUUID = uuid.New().String()
-	} else {
-		ruleUUID = state.RuleId.ValueString()
 	}
 
 	// Set CMS Alarm Rule
