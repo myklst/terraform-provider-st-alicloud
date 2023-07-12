@@ -1,7 +1,7 @@
 # The name of Terraform custom provider.
 CUSTOM_PROVIDER_NAME ?= terraform-provider-st-alicloud
 # The url of Terraform provider.
-CUSTOM_PROVIDER_URL ?= registry.terraform.io/ruokei/st-alicloud
+CUSTOM_PROVIDER_URL ?= registry.terraform.io/myklst/st-alicloud
 
 .PHONY: install-local-custom-provider
 install-local-custom-provider:
