@@ -3,6 +3,7 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -20,7 +21,6 @@ import (
 var (
 	_ resource.Resource               = &cmsAlarmRuleResource{}
 	_ resource.ResourceWithConfigure  = &cmsAlarmRuleResource{}
-	_ resource.ResourceWithModifyPlan = &cmsAlarmRuleResource{}
 )
 
 func NewCmsAlarmRuleResource() resource.Resource {
@@ -100,10 +100,11 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 					},
 				},
 			},
-			"resources": schema.ListNestedAttribute{
-				Description: "List of alarm rule resource configurations.",
-				Required:    true,
-				NestedObject: schema.NestedAttributeObject{
+		},
+		Blocks: map[string]schema.Block{
+			"resources": schema.ListNestedBlock{
+				Description: "The resources tied to the alarm rule.",
+				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"resource_category": schema.StringAttribute{
 							Description: "Alarm rule resource category.",
@@ -200,7 +201,8 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			}
 		}
 
-		if alarmRuleResponse.String() != "{}" {
+		totalRules, _ := strconv.ParseInt(*alarmRuleResponse.Body.Total, 10, 64)
+		if totalRules > int64(0) {
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
@@ -208,6 +210,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw)
 			state.CompositeExpression.Level = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level)
 			state.CompositeExpression.Times = types.Int64Value(int64(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times))
+			state.Resources = []*resourceConfig{}
 
 			jsonString := *alarmRuleResponse.Body.Alarms.Alarm[0].Resources
 			var processedString []map[string]string
@@ -278,17 +281,25 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	var ruleUUID string
+	if state.RuleId == types.StringNull() {
+		ruleUUID = uuid.New().String()
+	} else {
+		ruleUUID = state.RuleId.ValueString()
+	}
+
 	// Set CMS Alarm Rule
-	err := r.setRule(ctx, plan, state.RuleId.ValueString())
+	err := r.setRule(ctx, plan, ruleUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Set Alarm Rule",
+			"[API ERROR] Failed to Update Alarm Rule",
 			err.Error(),
 		)
 		return
 	}
 
 	// Set state items
+	state.RuleId = types.StringValue(ruleUUID)
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
@@ -351,32 +362,15 @@ func (r *cmsAlarmRuleResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 }
 
-func (r *cmsAlarmRuleResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	// If the entire plan is null, the resource is planned for destruction.
-	if !(req.Plan.Raw.IsNull()) {
-		var plan *cmsAlarmRuleResourceModel
-		getPlanDiags := req.Plan.Get(ctx, &plan)
-		resp.Diagnostics.Append(getPlanDiags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		resp.Plan.Set(ctx, &plan)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-}
-
 func (r *cmsAlarmRuleResource) setRule(ctx context.Context, plan *cmsAlarmRuleResourceModel, ruleId string) error {
 	setAlarmRule := func() error {
 		runtime := &util.RuntimeOptions{}
 
 		var resources []map[string]string
 
-		for _, x := range plan.Resources {
+		for _, resourceConfig := range plan.Resources {
 			resource := map[string]string{
-				x.ResourceCategory.ValueString(): x.ResourceValue.ValueString(),
+				resourceConfig.ResourceCategory.ValueString(): resourceConfig.ResourceValue.ValueString(),
 			}
 			resources = append(resources, resource)
 		}

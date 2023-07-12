@@ -14,25 +14,24 @@ Provides a Cloud Monitor Service alarm rule resource.
 
 ```terraform
 resource "st-alicloud_cms_alarm_rule" "alarm_rule" {
-    rule_name = "test-rule-name"
-    namespace = "acs_emr" 
-    metric_name = "test-metric-name"
-    resources = [
-    {
-      resource_category = "test-resource-1"
-      resource_value    = "test-resource-value-1"
-    },
-    {
-      resource_category = "test-resource-2"
-      resource_value    = "test-resource-value-2"
-    }
-  ]
-    contact_groups = "test-contact-group"
-    composite_expression = {
-        expression_raw = "@test-metric-name[60].$Maximum>1"
-        level = "critical"
-        times = 5
-    }
+  rule_name      = "test-rule-name"
+  namespace      = "acs_emr"
+  metric_name    = "test-metric-name"
+  contact_groups = "test-contact-group"
+  composite_expression = {
+    expression_raw = "@test-metric-name[60].$Maximum>1"
+    level          = "critical"
+    times          = 5
+  }
+
+  resources {
+    resource_category = "test-resource-1"
+    resource_value    = "test-resource-value-1"
+  }
+  resources {
+    resource_category = "test-resource-2"
+    resource_value    = "test-resource-value-2"
+  }
 }
 ```
 
@@ -45,8 +44,11 @@ resource "st-alicloud_cms_alarm_rule" "alarm_rule" {
 - `contact_groups` (String) Alarm Contact Groups.
 - `metric_name` (String) Alarm Metric Name.
 - `namespace` (String) Alarm Namespace.
-- `resources` (Attributes List) List of alarm rule resource configurations. (see [below for nested schema](#nestedatt--resources))
 - `rule_name` (String) Alarm Rule Name.
+
+### Optional
+
+- `resources` (Block List) The resources tied to the alarm rule. (see [below for nested schema](#nestedblock--resources))
 
 ### Read-Only
 
@@ -62,7 +64,7 @@ Required:
 - `times` (Number) Alarm retry times.
 
 
-<a id="nestedatt--resources"></a>
+<a id="nestedblock--resources"></a>
 ### Nested Schema for `resources`
 
 Required:
