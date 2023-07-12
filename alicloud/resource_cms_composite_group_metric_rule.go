@@ -2,7 +2,6 @@ package alicloud
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -19,8 +18,8 @@ import (
 )
 
 var (
-	_ resource.Resource               = &cmsAlarmRuleResource{}
-	_ resource.ResourceWithConfigure  = &cmsAlarmRuleResource{}
+	_ resource.Resource              = &cmsAlarmRuleResource{}
+	_ resource.ResourceWithConfigure = &cmsAlarmRuleResource{}
 )
 
 func NewCmsAlarmRuleResource() resource.Resource {
@@ -32,13 +31,13 @@ type cmsAlarmRuleResource struct {
 }
 
 type cmsAlarmRuleResourceModel struct {
-	RuleId              types.String      `tfsdk:"rule_id"`
-	RuleName            types.String      `tfsdk:"rule_name"`
-	Namespace           types.String      `tfsdk:"namespace"`
-	MetricName          types.String      `tfsdk:"metric_name"`
-	Resources           []*resourceConfig `tfsdk:"resources"`
-	ContactGroups       types.String      `tfsdk:"contact_groups"`
-	CompositeExpression expressionConfig  `tfsdk:"composite_expression"`
+	RuleId              types.String     `tfsdk:"rule_id"`
+	RuleName            types.String     `tfsdk:"rule_name"`
+	GroupId             types.Int64      `tfsdk:"group_id"`
+	Namespace           types.String     `tfsdk:"namespace"`
+	MetricName          types.String     `tfsdk:"metric_name"`
+	ContactGroups       types.String     `tfsdk:"contact_groups"`
+	CompositeExpression expressionConfig `tfsdk:"composite_expression"`
 }
 
 type expressionConfig struct {
@@ -47,14 +46,9 @@ type expressionConfig struct {
 	Times         types.Int64  `tfsdk:"times"`
 }
 
-type resourceConfig struct {
-	ResourceCategory types.String `tfsdk:"resource_category"`
-	ResourceValue    types.String `tfsdk:"resource_value"`
-}
-
 // Metadata returns the resource CMS Alarm Rule type name.
 func (r *cmsAlarmRuleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_cms_alarm_rule"
+	resp.TypeName = req.ProviderTypeName + "_cms_composite_group_metric_rule"
 }
 
 // Schema defines the schema for the CMS Alarm Rule resource.
@@ -68,6 +62,10 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 			},
 			"rule_name": schema.StringAttribute{
 				Description: "Alarm Rule Name.",
+				Required:    true,
+			},
+			"group_id": schema.Int64Attribute{
+				Description: "Monitoring Group Rule Id.",
 				Required:    true,
 			},
 			"namespace": schema.StringAttribute{
@@ -101,23 +99,6 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 		},
-		Blocks: map[string]schema.Block{
-			"resources": schema.ListNestedBlock{
-				Description: "The resources tied to the alarm rule.",
-				NestedObject: schema.NestedBlockObject{
-					Attributes: map[string]schema.Attribute{
-						"resource_category": schema.StringAttribute{
-							Description: "Alarm rule resource category.",
-							Required:    true,
-						},
-						"resource_value": schema.StringAttribute{
-							Description: "Alarm rule resource value.",
-							Required:    true,
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -145,7 +126,7 @@ func (r *cmsAlarmRuleResource) Create(ctx context.Context, req resource.CreateRe
 	err := r.setRule(ctx, plan, ruleUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Set Alarm Rule",
+			"[API ERROR] Failed to Set Group Metric Rule",
 			err.Error(),
 		)
 		return
@@ -157,7 +138,7 @@ func (r *cmsAlarmRuleResource) Create(ctx context.Context, req resource.CreateRe
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
-	state.Resources = plan.Resources
+	state.GroupId = plan.GroupId
 	state.ContactGroups = plan.ContactGroups
 	state.CompositeExpression = plan.CompositeExpression
 
@@ -202,39 +183,25 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 		}
 
 		totalRules, _ := strconv.ParseInt(*alarmRuleResponse.Body.Total, 10, 64)
+		groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
+
 		if totalRules > 0 {
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
 			state.ContactGroups = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].ContactGroups)
+			state.GroupId = types.Int64Value(groupId)
+
 			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw)
 			state.CompositeExpression.Level = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level)
 			state.CompositeExpression.Times = types.Int64Value(int64(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times))
-			state.Resources = []*resourceConfig{}
-
-			jsonString := *alarmRuleResponse.Body.Alarms.Alarm[0].Resources
-			var processedString []map[string]string
-
-			_err := json.Unmarshal([]byte(jsonString), &processedString)
-			if _err != nil {
-				return _err
-			}
-
-			for _, resource := range processedString {
-				config := &resourceConfig{}
-				for key, value := range resource {
-					config.ResourceCategory = types.StringValue(key)
-					config.ResourceValue = types.StringValue(value)
-				}
-				state.Resources = append(state.Resources, config)
-			}
 		} else {
 			state.RuleId = types.StringNull()
 			state.RuleName = types.StringNull()
 			state.Namespace = types.StringNull()
 			state.MetricName = types.StringNull()
-			state.Resources = []*resourceConfig{}
 			state.ContactGroups = types.StringNull()
+			state.GroupId = types.Int64Null()
 			state.CompositeExpression.ExpressionRaw = types.StringNull()
 			state.CompositeExpression.Level = types.StringNull()
 			state.CompositeExpression.Times = types.Int64Null()
@@ -249,7 +216,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 	err := backoff.Retry(readAlarmRule, reconnectBackoff)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read CMS Alarm Rule",
+			"[API ERROR] Failed to Read CMS Group Metric Rule",
 			err.Error(),
 		)
 		return
@@ -290,7 +257,7 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 	err := r.setRule(ctx, plan, ruleUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Update Alarm Rule",
+			"[API ERROR] Failed to Update CMS Group Metric Rule",
 			err.Error(),
 		)
 		return
@@ -301,7 +268,7 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
-	state.Resources = plan.Resources
+	state.GroupId = plan.GroupId
 	state.ContactGroups = plan.ContactGroups
 	state.CompositeExpression = plan.CompositeExpression
 
@@ -353,7 +320,7 @@ func (r *cmsAlarmRuleResource) Delete(ctx context.Context, req resource.DeleteRe
 	err := backoff.Retry(deleteAlarmRule, reconnectBackoff)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Delete CMS Alarm Rule",
+			"[API ERROR] Failed to Delete CMS Group Metric Rule",
 			err.Error(),
 		)
 		return
@@ -364,35 +331,53 @@ func (r *cmsAlarmRuleResource) setRule(ctx context.Context, plan *cmsAlarmRuleRe
 	setAlarmRule := func() error {
 		runtime := &util.RuntimeOptions{}
 
-		var resources []map[string]string
-
-		for _, resourceConfig := range plan.Resources {
-			resource := map[string]string{
-				resourceConfig.ResourceCategory.ValueString(): resourceConfig.ResourceValue.ValueString(),
-			}
-			resources = append(resources, resource)
-		}
-
-		jsonData, _err := json.Marshal(resources)
-		if _err != nil {
-			return _err
-		}
-		jsonString := string(jsonData)
-
-		compositeExpression := &alicloudCmsClient.PutResourceMetricRuleRequestCompositeExpression{
-			ExpressionRaw: tea.String(plan.CompositeExpression.ExpressionRaw.ValueString()),
-			Level:         tea.String(plan.CompositeExpression.Level.ValueString()),
-			Times:         tea.Int32(int32(plan.CompositeExpression.Times.ValueInt64())),
+		// Placeholder Rule to be replaced by PutResourceMetricRule,
+		// Alicloud API requires these values when creating a group metric rule.
+		createGroupMetricRulesRequest := &alicloudCmsClient.CreateGroupMetricRulesRequest{
+			GroupId: tea.Int64(plan.GroupId.ValueInt64()),
+			GroupMetricRules: []*alicloudCmsClient.CreateGroupMetricRulesRequestGroupMetricRules{
+				{
+					MetricName: tea.String("CPUUtilization"),
+					RuleId:     tea.String(ruleId),
+					Namespace:  tea.String("acs_ecs_dashboard"),
+					RuleName:   tea.String(plan.RuleName.ValueString()),
+					Escalations: &alicloudCmsClient.CreateGroupMetricRulesRequestGroupMetricRulesEscalations{
+						Critical: &alicloudCmsClient.CreateGroupMetricRulesRequestGroupMetricRulesEscalationsCritical{
+							Times:              tea.Int32(5),
+							Threshold:          tea.String("75"),
+							Statistics:         tea.String("Average"),
+							ComparisonOperator: tea.String("GreaterThanOrEqualToThreshold"),
+						},
+					},
+				},
+			},
 		}
 
 		putResourceMetricRuleRequest := &alicloudCmsClient.PutResourceMetricRuleRequest{
-			RuleId:              tea.String(ruleId),
-			RuleName:            tea.String(plan.RuleName.ValueString()),
-			Namespace:           tea.String(plan.Namespace.ValueString()),
-			MetricName:          tea.String(plan.MetricName.ValueString()),
-			Resources:           tea.String(jsonString),
-			ContactGroups:       tea.String(plan.ContactGroups.ValueString()),
-			CompositeExpression: compositeExpression,
+			RuleId:        tea.String(ruleId),
+			RuleName:      tea.String(plan.RuleName.ValueString()),
+			Namespace:     tea.String(plan.Namespace.ValueString()),
+			MetricName:    tea.String(plan.MetricName.ValueString()),
+			Resources:     tea.String("[{\"\":\"\"}]"), // Resources will be replaced by Monitoring Group Resources
+			ContactGroups: tea.String(plan.ContactGroups.ValueString()),
+			CompositeExpression: &alicloudCmsClient.PutResourceMetricRuleRequestCompositeExpression{
+				ExpressionRaw: tea.String(plan.CompositeExpression.ExpressionRaw.ValueString()),
+				Level:         tea.String(plan.CompositeExpression.Level.ValueString()),
+				Times:         tea.Int32(int32(plan.CompositeExpression.Times.ValueInt64())),
+			},
+		}
+
+		_, _err := r.client.CreateGroupMetricRulesWithOptions(createGroupMetricRulesRequest, runtime)
+		if _err != nil {
+			if _t, ok := _err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return _err
+				} else {
+					return backoff.Permanent(_err)
+				}
+			} else {
+				return _err
+			}
 		}
 
 		_, err := r.client.PutResourceMetricRuleWithOptions(putResourceMetricRuleRequest, runtime)
