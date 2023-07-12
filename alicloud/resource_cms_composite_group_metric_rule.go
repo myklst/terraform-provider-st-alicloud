@@ -183,9 +183,10 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 		}
 
 		totalRules, _ := strconv.ParseInt(*alarmRuleResponse.Body.Total, 10, 64)
-		groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
 
 		if totalRules > 0 {
+			groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
+			
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
