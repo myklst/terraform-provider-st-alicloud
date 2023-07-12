@@ -13,12 +13,20 @@ Provides a Cloud Monitor Service alarm rule resource.
 ## Example Usage
 
 ```terraform
-resource "st-alicloud_cms_alarm_rule" "default" {
-    rule_id = "test-rule-id"
+resource "st-alicloud_cms_alarm_rule" "alarm_rule" {
     rule_name = "test-rule-name"
     namespace = "acs_emr" 
     metric_name = "test-metric-name"
-    resources = "[  {\"resource-name\" : \"resource-value\" } ]"
+    resources = [
+    {
+      resource_category = "test-resource-1"
+      resource_value    = "test-resource-value-1"
+    },
+    {
+      resource_category = "test-resource-2"
+      resource_value    = "test-resource-value-2"
+    }
+  ]
     contact_groups = "test-contact-group"
     composite_expression = {
         expression_raw = "@test-metric-name[60].$Maximum>1"
@@ -33,13 +41,16 @@ resource "st-alicloud_cms_alarm_rule" "default" {
 
 ### Required
 
-- `composite_expression` (Attributes) The composite expression configuration for alerts. See the following object composite_expression. (see [below for nested schema](#nestedatt--composite_expression))
+- `composite_expression` (Attributes) The composite expression configuration for alarms. (see [below for nested schema](#nestedatt--composite_expression))
 - `contact_groups` (String) Alarm Contact Groups.
 - `metric_name` (String) Alarm Metric Name.
 - `namespace` (String) Alarm Namespace.
-- `resources` (String) Alarm Resources.
-- `rule_id` (String) Alarm Rule Id.
+- `resources` (Attributes List) List of alarm rule resource configurations. (see [below for nested schema](#nestedatt--resources))
 - `rule_name` (String) Alarm Rule Name.
+
+### Read-Only
+
+- `rule_id` (String) Alarm Rule Id.
 
 <a id="nestedatt--composite_expression"></a>
 ### Nested Schema for `composite_expression`
@@ -49,5 +60,14 @@ Required:
 - `expression_raw` (String) Alarm rule expression.
 - `level` (String) Alarm alert level.
 - `times` (Number) Alarm retry times.
+
+
+<a id="nestedatt--resources"></a>
+### Nested Schema for `resources`
+
+Required:
+
+- `resource_category` (String) Alarm rule resource category.
+- `resource_value` (String) Alarm rule resource value.
 
 

@@ -2,16 +2,16 @@ package alicloud
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	alicloudCmsClient "github.com/alibabacloud-go/cms-20190101/v8/client"
@@ -32,19 +32,24 @@ type cmsAlarmRuleResource struct {
 }
 
 type cmsAlarmRuleResourceModel struct {
-	RuleId              types.String     `tfsdk:"rule_id"`
-	RuleName            types.String     `tfsdk:"rule_name"`
-	Namespace           types.String     `tfsdk:"namespace"`
-	MetricName          types.String     `tfsdk:"metric_name"`
-	Resources           types.String     `tfsdk:"resources"`
-	ContactGroups       types.String     `tfsdk:"contact_groups"`
-	CompositeExpression expressionConfig `tfsdk:"composite_expression"`
+	RuleId              types.String      `tfsdk:"rule_id"`
+	RuleName            types.String      `tfsdk:"rule_name"`
+	Namespace           types.String      `tfsdk:"namespace"`
+	MetricName          types.String      `tfsdk:"metric_name"`
+	Resources           []*resourceConfig `tfsdk:"resources"`
+	ContactGroups       types.String      `tfsdk:"contact_groups"`
+	CompositeExpression expressionConfig  `tfsdk:"composite_expression"`
 }
 
 type expressionConfig struct {
 	ExpressionRaw types.String `tfsdk:"expression_raw"`
 	Level         types.String `tfsdk:"level"`
 	Times         types.Int64  `tfsdk:"times"`
+}
+
+type resourceConfig struct {
+	ResourceCategory types.String `tfsdk:"resource_category"`
+	ResourceValue    types.String `tfsdk:"resource_value"`
 }
 
 // Metadata returns the resource CMS Alarm Rule type name.
@@ -59,10 +64,7 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 		Attributes: map[string]schema.Attribute{
 			"rule_id": schema.StringAttribute{
 				Description: "Alarm Rule Id.",
-				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				Computed:    true,
 			},
 			"rule_name": schema.StringAttribute{
 				Description: "Alarm Rule Name.",
@@ -76,16 +78,12 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 				Description: "Alarm Metric Name.",
 				Required:    true,
 			},
-			"resources": schema.StringAttribute{
-				Description: "Alarm Resources.",
-				Required:    true,
-			},
 			"contact_groups": schema.StringAttribute{
 				Description: "Alarm Contact Groups.",
 				Required:    true,
 			},
 			"composite_expression": schema.SingleNestedAttribute{
-				Description: "The composite expression configuration for alerts. See the following object composite_expression.",
+				Description: "The composite expression configuration for alarms.",
 				Required:    true,
 				Attributes: map[string]schema.Attribute{
 					"expression_raw": schema.StringAttribute{
@@ -99,6 +97,22 @@ func (r *cmsAlarmRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 					"times": schema.Int64Attribute{
 						Description: "Alarm retry times.",
 						Required:    true,
+					},
+				},
+			},
+			"resources": schema.ListNestedAttribute{
+				Description: "List of alarm rule resource configurations.",
+				Required:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"resource_category": schema.StringAttribute{
+							Description: "Alarm rule resource category.",
+							Required:    true,
+						},
+						"resource_value": schema.StringAttribute{
+							Description: "Alarm rule resource value.",
+							Required:    true,
+						},
 					},
 				},
 			},
@@ -124,8 +138,10 @@ func (r *cmsAlarmRuleResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	ruleUUID := uuid.New().String()
+
 	// Set CMS Alarm Rule
-	err := r.setRule(plan)
+	err := r.setRule(ctx, plan, ruleUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Set Alarm Rule",
@@ -136,7 +152,7 @@ func (r *cmsAlarmRuleResource) Create(ctx context.Context, req resource.CreateRe
 
 	// Set state items
 	state := &cmsAlarmRuleResourceModel{}
-	state.RuleId = plan.RuleId
+	state.RuleId = types.StringValue(ruleUUID)
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
@@ -188,16 +204,33 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
-			state.Resources = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Resources)
 			state.ContactGroups = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].ContactGroups)
 			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw)
 			state.CompositeExpression.Level = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level)
 			state.CompositeExpression.Times = types.Int64Value(int64(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times))
+
+			jsonString := *alarmRuleResponse.Body.Alarms.Alarm[0].Resources
+			var processedString []map[string]string
+
+			_err := json.Unmarshal([]byte(jsonString), &processedString)
+			if _err != nil {
+				return _err
+			}
+
+			for _, resource := range processedString {
+				config := &resourceConfig{}
+				for key, value := range resource {
+					config.ResourceCategory = types.StringValue(key)
+					config.ResourceValue = types.StringValue(value)
+				}
+				state.Resources = append(state.Resources, config)
+			}
 		} else {
+			state.RuleId = types.StringNull()
 			state.RuleName = types.StringNull()
 			state.Namespace = types.StringNull()
 			state.MetricName = types.StringNull()
-			state.Resources = types.StringNull()
+			state.Resources = []*resourceConfig{}
 			state.ContactGroups = types.StringNull()
 			state.CompositeExpression.ExpressionRaw = types.StringNull()
 			state.CompositeExpression.Level = types.StringNull()
@@ -230,6 +263,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 // Update updates the CMS Alarm Rule resource and sets the updated Terraform state on success.
 func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan *cmsAlarmRuleResourceModel
+	var state *cmsAlarmRuleResourceModel
 
 	// Retrieve values from plan
 	getPlanDiags := req.Plan.Get(ctx, &plan)
@@ -238,8 +272,14 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	getStateDiags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(getStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Set CMS Alarm Rule
-	err := r.setRule(plan)
+	err := r.setRule(ctx, plan, state.RuleId.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Set Alarm Rule",
@@ -249,8 +289,6 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Set state items
-	state := &cmsAlarmRuleResourceModel{}
-	state.RuleId = plan.RuleId
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
@@ -330,9 +368,24 @@ func (r *cmsAlarmRuleResource) ModifyPlan(ctx context.Context, req resource.Modi
 	}
 }
 
-func (r *cmsAlarmRuleResource) setRule(plan *cmsAlarmRuleResourceModel) error {
+func (r *cmsAlarmRuleResource) setRule(ctx context.Context, plan *cmsAlarmRuleResourceModel, ruleId string) error {
 	setAlarmRule := func() error {
 		runtime := &util.RuntimeOptions{}
+
+		var resources []map[string]string
+
+		for _, x := range plan.Resources {
+			resource := map[string]string{
+				x.ResourceCategory.ValueString(): x.ResourceValue.ValueString(),
+			}
+			resources = append(resources, resource)
+		}
+
+		jsonData, _err := json.Marshal(resources)
+		if _err != nil {
+			return _err
+		}
+		jsonString := string(jsonData)
 
 		compositeExpression := &alicloudCmsClient.PutResourceMetricRuleRequestCompositeExpression{
 			ExpressionRaw: tea.String(plan.CompositeExpression.ExpressionRaw.ValueString()),
@@ -341,11 +394,11 @@ func (r *cmsAlarmRuleResource) setRule(plan *cmsAlarmRuleResourceModel) error {
 		}
 
 		putResourceMetricRuleRequest := &alicloudCmsClient.PutResourceMetricRuleRequest{
-			RuleId:              tea.String(plan.RuleId.ValueString()),
+			RuleId:              tea.String(ruleId),
 			RuleName:            tea.String(plan.RuleName.ValueString()),
 			Namespace:           tea.String(plan.Namespace.ValueString()),
 			MetricName:          tea.String(plan.MetricName.ValueString()),
-			Resources:           tea.String(plan.Resources.ValueString()),
+			Resources:           tea.String(jsonString),
 			ContactGroups:       tea.String(plan.ContactGroups.ValueString()),
 			CompositeExpression: compositeExpression,
 		}
@@ -362,7 +415,6 @@ func (r *cmsAlarmRuleResource) setRule(plan *cmsAlarmRuleResourceModel) error {
 				return err
 			}
 		}
-
 		return nil
 	}
 
