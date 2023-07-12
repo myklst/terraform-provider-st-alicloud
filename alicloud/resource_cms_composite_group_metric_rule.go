@@ -186,7 +186,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 
 		if totalRules > 0 {
 			groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
-			
+
 			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
 			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
 			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
@@ -196,16 +196,18 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw)
 			state.CompositeExpression.Level = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level)
 			state.CompositeExpression.Times = types.Int64Value(int64(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times))
+
+			// Set refreshed state
+			setStateDiags := resp.State.Set(ctx, &state)
+			resp.Diagnostics.Append(setStateDiags...)
+			if resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError(
+					"[API ERROR] Failed to Set Read CMS Group Metric Rule to State",
+					err.Error(),
+				)
+			}
 		} else {
-			state.RuleId = types.StringNull()
-			state.RuleName = types.StringNull()
-			state.Namespace = types.StringNull()
-			state.MetricName = types.StringNull()
-			state.ContactGroups = types.StringNull()
-			state.GroupId = types.Int64Null()
-			state.CompositeExpression.ExpressionRaw = types.StringNull()
-			state.CompositeExpression.Level = types.StringNull()
-			state.CompositeExpression.Times = types.Int64Null()
+			resp.State.RemoveResource(ctx)
 		}
 		return nil
 	}
@@ -220,13 +222,6 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			"[API ERROR] Failed to Read CMS Group Metric Rule",
 			err.Error(),
 		)
-		return
-	}
-
-	// Set refreshed state
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
 		return
 	}
 }
@@ -249,13 +244,8 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	ruleUUID := state.RuleId.ValueString()
-	if state.RuleId == types.StringNull() {
-		ruleUUID = uuid.New().String()
-	}
-
 	// Set CMS Alarm Rule
-	err := r.setRule(ctx, plan, ruleUUID)
+	err := r.setRule(ctx, plan, state.RuleId.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Update CMS Group Metric Rule",
@@ -265,7 +255,6 @@ func (r *cmsAlarmRuleResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Set state items
-	state.RuleId = types.StringValue(ruleUUID)
 	state.RuleName = plan.RuleName
 	state.Namespace = plan.Namespace
 	state.MetricName = plan.MetricName
