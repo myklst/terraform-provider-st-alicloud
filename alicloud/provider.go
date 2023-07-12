@@ -16,6 +16,7 @@ import (
 	alicloudDnsClient "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	alicloudBaseClient "github.com/alibabacloud-go/bssopenapi-20171214/v3/client"
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
+	alicloudCmsClient "github.com/alibabacloud-go/cms-20190101/v8/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
@@ -30,6 +31,7 @@ type alicloudClients struct {
 	dnsClient      *alicloudDnsClient.Client
 	slbClient      *alicloudSlbClient.Client
 	ramClient      *alicloudRamClient.Client
+	cmsClient      *alicloudCmsClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -278,6 +280,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud CMS Client
+	cmsClientConfig := clientCredentialsConfig
+	cmsClientConfig.Endpoint = tea.String(fmt.Sprintf("metrics.%s.aliyuncs.com", region))
+	cmsClient, err := alicloudCmsClient.NewClient(cmsClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud CMS API Client",
+			"An unexpected error occurred when creating the AliCloud CMS API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud CMS Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:     baseClient,
@@ -286,6 +303,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		dnsClient:      dnsClient,
 		slbClient:      slbClient,
 		ramClient:      ramClient,
+		cmsClient:      cmsClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -307,5 +325,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAliDnsGtmInstanceResource,
 		NewRamUserGroupAttachmentResource,
 		NewRamPolicyResource,
+		NewCmsAlarmRuleResource,
 	}
 }
