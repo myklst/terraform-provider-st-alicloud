@@ -125,7 +125,7 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 
 		if dnsResp, err = r.client.DescribeDomainInfoWithOptions(describeDomainInfoWithDomainRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "DnsSystemBusyness" || *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else {
 					return backoff.Permanent(err)
@@ -239,7 +239,7 @@ func (r *alidnsDomainAttachmentResource) createBindInstance(plan *alidnsDomainAt
 
 		if _, err := r.client.BindInstanceDomainsWithOptions(bindInstanceDomainsWithIdRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "DnsSystemBusyness" || *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else {
 					return backoff.Permanent(err)
@@ -277,7 +277,7 @@ func (r *alidnsDomainAttachmentResource) removeBindInstance(state *alidnsDomainA
 
 		if _, err := r.client.UnbindInstanceDomainsWithOptions(unbindInstanceDomainsRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "DnsSystemBusyness" || *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else {
 					return backoff.Permanent(err)

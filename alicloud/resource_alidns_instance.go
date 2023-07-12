@@ -184,7 +184,7 @@ func (r *alidnsInstanceResource) Create(ctx context.Context, req resource.Create
 		runtime := &util.RuntimeOptions{}
 		if createInstanceResponse, err = r.baseClient.CreateInstanceWithOptions(createAlidnsInstanceRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "DnsSystemBusyness" || *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else if *_t.Code == "NotApplicable" {
 					r.baseClient.Endpoint = tea.String("business.ap-southeast-1.aliyuncs.com")
@@ -247,7 +247,7 @@ func (r *alidnsInstanceResource) Read(ctx context.Context, req resource.ReadRequ
 		}
 		if describeRsp, err = r.client.DescribeDnsProductInstanceWithOptions(describeDnsProductInstanceRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "test" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else {
 					return backoff.Permanent(err)
@@ -406,7 +406,7 @@ func (r *alidnsInstanceResource) Update(ctx context.Context, req resource.Update
 		runtime := &util.RuntimeOptions{}
 		if modifyInstanceResponse, err = r.baseClient.ModifyInstanceWithOptions(modifyAlidnsInstanceRequest, runtime); err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else if *_t.Code == "NotApplicable" {
 					r.baseClient.Endpoint = tea.String("business.ap-southeast-1.aliyuncs.com")
@@ -489,7 +489,7 @@ func (r alidnsInstanceResource) setInstanceRenewal(req *alicloudBaseClient.SetRe
 		_, err := r.baseClient.SetRenewalWithOptions(req, runtime)
 		if err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
-				if *_t.Code == "Throttling.User" {
+				if isAbleToRetry(*_t.Code) {
 					return err
 				} else if *_t.Code == "NotApplicable" {
 					r.baseClient.Endpoint = tea.String("business.ap-southeast-1.aliyuncs.com")
