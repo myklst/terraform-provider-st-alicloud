@@ -37,7 +37,7 @@ type ddoscooAssociateWebCertResourceModel struct {
 
 // Metadata returns the SSL binding resource name.
 func (r *ddoscooAssociateWebcertResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_ddoscoo_associate_webcert"
+	resp.TypeName = req.ProviderTypeName + "_ddoscoo_webconfig_ssl_attachment"
 }
 
 // Schema defines the schema for the SSL certificate binding resource.
