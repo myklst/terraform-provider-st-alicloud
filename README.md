@@ -75,7 +75,7 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to handle policy content that exceeds the limit of 6144 characters.
   It provides functionality to create policies by splitting the content into smaller segments that fit within the limit,
   enabling the management and combination of these segments to form the complete policy. Finally, the policy will be attached to the relevant user.
-  
+
 - **st-alicloud_cms_alarm_rule**
 
   The official AliCloud Terraform provider's resource
@@ -83,6 +83,20 @@ scenario. The reason behind every resources and data sources are stated as below
   does not support adding alarm rules into application groups based on expression-based creation.
 
   For namespaces and metric inputs, please refer to: [*Alicloud Alarm Metric List*](https://cms.console.aliyun.com/metric-meta)
+
+**st-alicloud_alidns_instance**
+
+   The official AliCloud Terraform provider's resource
+   [*alicloud_alidns_instance*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/alidns_instance)
+   will destroy and create a new instance everytime when upgrading or downgrading.
+
+**st-alicloud_alidns_domain_attachment**
+
+   The official AliCloud Terraform provider's resource
+   [*alicloud_dns_domain_attachment*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/dns_domain_attachment)
+   accept input of a list of domains. There will be an issue when upgrading a batch of domains when the existing attachment
+   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one togather with
+   the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
 
 ### Data Sources
 
