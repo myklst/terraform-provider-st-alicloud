@@ -2,7 +2,6 @@ package alicloud
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
@@ -134,11 +133,6 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 				return err
 			}
 		}
-
-		if dnsResp.Body.InstanceId == nil {
-			return backoff.Permanent(fmt.Errorf("domain does not bind to any instance domain"))
-		}
-
 		return nil
 	}
 
@@ -153,14 +147,19 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 		return
 	}
 
-	state.InstanceId = types.StringValue(*dnsResp.Body.InstanceId)
-	state.Domain = types.StringValue(*dnsResp.Body.DomainName)
-
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
+	if dnsResp.Body.InstanceId == nil {
+		resp.State.RemoveResource(ctx)
 		return
 	}
+	// state.InstanceId = types.StringValue(*dnsResp.Body.InstanceId)
+	// state.Domain = types.StringValue(*dnsResp.Body.DomainName)
+
+	// setStateDiags := resp.State.Set(ctx, &state)
+	// resp.Diagnostics.Append(setStateDiags...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
+
 }
 
 func (r *alidnsDomainAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

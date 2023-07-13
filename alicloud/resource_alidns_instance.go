@@ -74,6 +74,9 @@ func (r *alidnsInstanceResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"instance_id": schema.StringAttribute{
 				Description: "Instance Domain Id.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"payment_type": schema.StringAttribute{
 				Description: "The Payment Type of the Global Traffic Manager instance." +
