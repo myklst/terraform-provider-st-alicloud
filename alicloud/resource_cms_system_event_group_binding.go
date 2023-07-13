@@ -124,10 +124,17 @@ func (r *cmsSystemEventGroupBindingResource) Read(ctx context.Context, req resou
 				state.ContactGroupName = types.StringValue(*contactGroup.ContactGroupName)
 				state.Level = types.StringValue(*contactGroup.Level)
 			}
+
+			setStateDiags := resp.State.Set(ctx, &state)
+			resp.Diagnostics.Append(setStateDiags...)
+			if resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError(
+					"[API ERROR] Failed to Set Read CMS System Event Group to State",
+					err.Error(),
+				)
+			}
 		} else {
-			state.RuleName = types.StringNull()
-			state.ContactGroupName = types.StringNull()
-			state.Level = types.StringNull()
+			resp.State.RemoveResource(ctx)
 		}
 
 		return nil
@@ -141,12 +148,6 @@ func (r *cmsSystemEventGroupBindingResource) Read(ctx context.Context, req resou
 			"[API ERROR] Failed to Read Users for Group",
 			err.Error(),
 		)
-		return
-	}
-
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
 		return
 	}
 }
