@@ -95,7 +95,7 @@ scenario. The reason behind every resources and data sources are stated as below
    The official AliCloud Terraform provider's resource
    [*alicloud_dns_domain_attachment*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/dns_domain_attachment)
    accept input of a list of domains. There will be an issue when upgrading a batch of domains when the existing attachment
-   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one togather with
+   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one together with
    the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
 
 ### Data Sources
