@@ -3,12 +3,12 @@
 page_title: "st-alicloud_cms_system_event_contact_group_attachment Resource - st-alicloud"
 subcategory: ""
 description: |-
-  Provides a Alicloud CMS System Event Group Binding Resource.
+  Provides a Alicloud CMS System Event Contact Group Attachment Resource.
 ---
 
 # st-alicloud_cms_system_event_contact_group_attachment (Resource)
 
-Provides a Alicloud CMS System Event Group Binding Resource.
+Provides a Alicloud CMS System Event Contact Group Attachment Resource.
 
 ## Example Usage
 
