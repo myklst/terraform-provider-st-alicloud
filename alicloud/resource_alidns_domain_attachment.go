@@ -114,15 +114,15 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 		return
 	}
 
-	var dnsResp *alicloudDnsClient.DescribeDomainInfoResponse
-	readDomainRecord := func() (err error) {
+		readDomainRecord := func() (err error) {
 		runtime := &util.RuntimeOptions{}
 
 		describeDomainInfoWithDomainRequest := &alicloudDnsClient.DescribeDomainInfoRequest{
 			DomainName: tea.String(state.Domain.ValueString()),
 		}
 
-		if dnsResp, err = r.client.DescribeDomainInfoWithOptions(describeDomainInfoWithDomainRequest, runtime); err != nil {
+		dnsResp, err := r.client.DescribeDomainInfoWithOptions(describeDomainInfoWithDomainRequest, runtime)
+		if err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*_t.Code) {
 					return err
@@ -133,6 +133,14 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 				return err
 			}
 		}
+
+		// Remove terraform state if existing binding is not found
+		// This will make sure terraform rebind domain correctly
+		if dnsResp.Body.InstanceId == nil {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+
 		return nil
 	}
 
@@ -144,11 +152,6 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 			"[API ERROR] Failed to get domain info.",
 			err.Error(),
 		)
-		return
-	}
-
-	if dnsResp.Body.InstanceId == nil {
-		resp.State.RemoveResource(ctx)
 		return
 	}
 }

@@ -3,6 +3,7 @@ package alicloud
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
@@ -199,6 +200,11 @@ func (r *alidnsInstanceResource) Create(ctx context.Context, req resource.Create
 				return err
 			}
 		}
+
+		if *createInstanceResponse.Body.Code == "PAY.AMOUNT_LIMIT_EXCEEDED" {
+			return backoff.Permanent(fmt.Errorf("%s", createInstanceResponse.String()))
+		}
+
 		return nil
 	}
 
@@ -209,14 +215,6 @@ func (r *alidnsInstanceResource) Create(ctx context.Context, req resource.Create
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Create AliDNS Instance",
 			err.Error(),
-		)
-		return
-	}
-
-	if *createInstanceResponse.Body.Code == "PAY.AMOUNT_LIMIT_EXCEEDED" {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Create AliDNS Instance",
-			createInstanceResponse.String(),
 		)
 		return
 	}
@@ -268,6 +266,8 @@ func (r *alidnsInstanceResource) Read(ctx context.Context, req resource.ReadRequ
 				if *_t.Code == "NotApplicable" {
 					r.baseClient.Endpoint = tea.String("business.ap-southeast-1.aliyuncs.com")
 					return err
+				} else if isAbleToRetry(*_t.Code) {
+					return err
 				} else {
 					return backoff.Permanent(err)
 				}
@@ -282,10 +282,17 @@ func (r *alidnsInstanceResource) Read(ctx context.Context, req resource.ReadRequ
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
 	err := backoff.Retry(readInstanceDomain, reconnectBackoff)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to find DNS Instance.",
-			err.Error(),
-		)
+		// Remove state if dns instance is not found
+		// This will make terraform to create a new instance
+		if strings.Contains(err.Error(), "InvalidDnsProduct") {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to find DNS Instance.",
+				err.Error(),
+			)
+		}
 		return
 	}
 
@@ -421,6 +428,12 @@ func (r *alidnsInstanceResource) Update(ctx context.Context, req resource.Update
 				return err
 			}
 		}
+
+		if *modifyInstanceResponse.Body.Code == "PAY.AMOUNT_LIMIT_EXCEEDED" ||
+			*modifyInstanceResponse.Body.Code == "MissingParameter" {
+			return backoff.Permanent(fmt.Errorf("%s", modifyInstanceResponse.String()))
+		}
+
 		return nil
 	}
 
@@ -431,15 +444,6 @@ func (r *alidnsInstanceResource) Update(ctx context.Context, req resource.Update
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Create AliDNS Instance",
 			err.Error(),
-		)
-		return
-	}
-
-	if *modifyInstanceResponse.Body.Code == "PAY.AMOUNT_LIMIT_EXCEEDED" ||
-		*modifyInstanceResponse.Body.Code == "MissingParameter" {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Create AliDNS Instance",
-			modifyInstanceResponse.String(),
 		)
 		return
 	}
