@@ -315,7 +315,6 @@ func (r *alidnsInstanceResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 	state.RenewalStatus = types.StringValue(*queryRsp.Body.Data.InstanceList[0].RenewStatus)
 	state.VersionCode = types.StringValue(*describeRsp.Body.VersionCode)
-	state.Period = types.Int64Value(1)
 
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
@@ -392,6 +391,12 @@ func (r *alidnsInstanceResource) Update(ctx context.Context, req resource.Update
 			"Downgrading of AliDNS Instance's Edition is not supported.",
 		)
 		return
+	}
+	if plan.Period != state.Period {
+		resp.Diagnostics.AddWarning(
+			"[Input Warning] Changing period have no effect",
+			"Changing period have no effect to the instance once the instance is built.",
+		)
 	}
 
 	//////////////////////// UPGRADE INSTANCE ////////////////////////
