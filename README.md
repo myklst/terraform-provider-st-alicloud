@@ -84,6 +84,20 @@ scenario. The reason behind every resources and data sources are stated as below
 
   For namespaces and metric inputs, please refer to: [*Alicloud Alarm Metric List*](https://cms.console.aliyun.com/metric-meta)
 
+**st-alicloud_alidns_instance**
+
+   The official AliCloud Terraform provider's resource
+   [*alicloud_alidns_instance*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/alidns_instance)
+   will destroy and create a new instance everytime when upgrading or downgrading.
+
+**st-alicloud_alidns_domain_attachment**
+
+   The official AliCloud Terraform provider's resource
+   [*alicloud_dns_domain_attachment*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/dns_domain_attachment)
+   accept input of a list of domains. There will be an issue when upgrading a batch of domains when the existing attachment
+   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one together with
+   the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
+
 - **st-alicloud_cms_system_event_contact_group_attachment**
 
   The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
