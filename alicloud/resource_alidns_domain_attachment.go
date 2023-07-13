@@ -151,15 +151,6 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	// state.InstanceId = types.StringValue(*dnsResp.Body.InstanceId)
-	// state.Domain = types.StringValue(*dnsResp.Body.DomainName)
-
-	// setStateDiags := resp.State.Set(ctx, &state)
-	// resp.Diagnostics.Append(setStateDiags...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-
 }
 
 func (r *alidnsDomainAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
