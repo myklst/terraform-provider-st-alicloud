@@ -18,30 +18,30 @@ import (
 )
 
 var (
-	_ resource.Resource              = &ddoscooAssociateWebcertResource{}
-	_ resource.ResourceWithConfigure = &ddoscooAssociateWebcertResource{}
+	_ resource.Resource              = &ddoscooWebconfigSslAttachmentResource{}
+	_ resource.ResourceWithConfigure = &ddoscooWebconfigSslAttachmentResource{}
 )
 
-func NewDdosCooAssociateWebcertResource() resource.Resource {
-	return &ddoscooAssociateWebcertResource{}
+func NewDdosCooWebconfigSslAttachmentResource() resource.Resource {
+	return &ddoscooWebconfigSslAttachmentResource{}
 }
 
-type ddoscooAssociateWebcertResource struct {
+type ddoscooWebconfigSslAttachmentResource struct {
 	client *alicloudAntiddosClient.Client
 }
 
-type ddoscooAssociateWebCertResourceModel struct {
+type ddoscooWebconfigSslAttachmentModel struct {
 	Domain types.String `tfsdk:"domain"`
 	CertId types.Int64  `tfsdk:"cert_id"`
 }
 
 // Metadata returns the SSL binding resource name.
-func (r *ddoscooAssociateWebcertResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ddoscoo_webconfig_ssl_attachment"
 }
 
 // Schema defines the schema for the SSL certificate binding resource.
-func (r *ddoscooAssociateWebcertResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Associates a domain with a SSL cert in Anti-DDoS website configuration.",
 		Attributes: map[string]schema.Attribute{
@@ -58,7 +58,7 @@ func (r *ddoscooAssociateWebcertResource) Schema(_ context.Context, _ resource.S
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *ddoscooAssociateWebcertResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -66,9 +66,9 @@ func (r *ddoscooAssociateWebcertResource) Configure(_ context.Context, req resou
 }
 
 // Create a new SSL cert and domain binding
-func (r *ddoscooAssociateWebcertResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan *ddoscooAssociateWebCertResourceModel
+	var plan *ddoscooWebconfigSslAttachmentModel
 	getStateDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -86,7 +86,7 @@ func (r *ddoscooAssociateWebcertResource) Create(ctx context.Context, req resour
 	}
 
 	// Set state items
-	state := &ddoscooAssociateWebCertResourceModel{
+	state := &ddoscooWebconfigSslAttachmentModel{
 		Domain: plan.Domain,
 		CertId: plan.CertId,
 	}
@@ -100,9 +100,9 @@ func (r *ddoscooAssociateWebcertResource) Create(ctx context.Context, req resour
 }
 
 // Read web rules configuration for SSL cert and domain binding
-func (r *ddoscooAssociateWebcertResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Get current state
-	var state *ddoscooAssociateWebCertResourceModel
+	var state *ddoscooWebconfigSslAttachmentModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -175,8 +175,8 @@ func (r *ddoscooAssociateWebcertResource) Read(ctx context.Context, req resource
 }
 
 // Update binds new SSL cert to domain and sets the updated Terraform state on success.
-func (r *ddoscooAssociateWebcertResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan *ddoscooAssociateWebCertResourceModel
+func (r *ddoscooWebconfigSslAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan *ddoscooWebconfigSslAttachmentModel
 
 	// Retrieve values from plan
 	getPlanDiags := req.Plan.Get(ctx, &plan)
@@ -196,7 +196,7 @@ func (r *ddoscooAssociateWebcertResource) Update(ctx context.Context, req resour
 	}
 
 	// Set state items
-	state := &ddoscooAssociateWebCertResourceModel{
+	state := &ddoscooWebconfigSslAttachmentModel{
 		Domain: plan.Domain,
 		CertId: plan.CertId,
 	}
@@ -210,9 +210,9 @@ func (r *ddoscooAssociateWebcertResource) Update(ctx context.Context, req resour
 }
 
 // SSL cert could not be unbinded, will always remain.
-func (r *ddoscooAssociateWebcertResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *ddoscooWebconfigSslAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
-	var state *ddoscooAssociateWebCertResourceModel
+	var state *ddoscooWebconfigSslAttachmentModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -221,7 +221,7 @@ func (r *ddoscooAssociateWebcertResource) Delete(ctx context.Context, req resour
 }
 
 // Function to bind certificate to domain
-func (r *ddoscooAssociateWebcertResource) bindCert(plan *ddoscooAssociateWebCertResourceModel) error {
+func (r *ddoscooWebconfigSslAttachmentResource) bindCert(plan *ddoscooWebconfigSslAttachmentModel) error {
 	bindSSLCert := func() error {
 		runtime := &util.RuntimeOptions{}
 
