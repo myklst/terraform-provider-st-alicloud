@@ -75,6 +75,14 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to handle policy content that exceeds the limit of 6144 characters.
   It provides functionality to create policies by splitting the content into smaller segments that fit within the limit,
   enabling the management and combination of these segments to form the complete policy. Finally, the policy will be attached to the relevant user.
+  
+- **st-alicloud_cms_alarm_rule**
+
+  The official AliCloud Terraform provider's resource
+  [*alicloud_cms_group_metric_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_group_metric_rule)
+  does not support adding alarm rules into application groups based on expression-based creation.
+
+  For namespaces and metric inputs, please refer to: [*Alicloud Alarm Metric List*](https://cms.console.aliyun.com/metric-meta)
 
 - **st-alicloud_cms_system_event_group_binding**
 
