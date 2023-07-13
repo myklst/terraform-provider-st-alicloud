@@ -14,31 +14,31 @@ import (
 )
 
 var (
-	_ resource.Resource              = &cmsSystemEventGroupBindingResource{}
-	_ resource.ResourceWithConfigure = &cmsSystemEventGroupBindingResource{}
+	_ resource.Resource              = &cmsSystemEventContactGroupAttachmentResource{}
+	_ resource.ResourceWithConfigure = &cmsSystemEventContactGroupAttachmentResource{}
 )
 
-func NewCmsSystemEventGroupBindingResource() resource.Resource {
-	return &cmsSystemEventGroupBindingResource{}
+func NewCmsSystemEventContactGroupAttachmentResource() resource.Resource {
+	return &cmsSystemEventContactGroupAttachmentResource{}
 }
 
-type cmsSystemEventGroupBindingResource struct {
+type cmsSystemEventContactGroupAttachmentResource struct {
 	client *alicloudCmsClient.Client
 }
 
-type cmsSystemEventGroupBindingResourceModel struct {
+type cmsSystemEventContactGroupAttachmentResourceModel struct {
 	RuleName         types.String `tfsdk:"rule_name"`
 	ContactGroupName types.String `tfsdk:"contact_group_name"`
 	Level            types.String `tfsdk:"level"`
 }
 
-func (r *cmsSystemEventGroupBindingResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_cms_system_event_group_binding"
+func (r *cmsSystemEventContactGroupAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_cms_system_event_contact_group_attachment"
 }
 
-func (r *cmsSystemEventGroupBindingResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *cmsSystemEventContactGroupAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Provides a Alicloud CMS System Event Group Binding Resource.",
+		Description: "Provides a Alicloud CMS System Event Contact Group Attachment Resource.",
 		Attributes: map[string]schema.Attribute{
 			"rule_name": schema.StringAttribute{
 				Description: "The name of the event-triggered alert rule.",
@@ -56,15 +56,15 @@ func (r *cmsSystemEventGroupBindingResource) Schema(_ context.Context, _ resourc
 	}
 }
 
-func (r *cmsSystemEventGroupBindingResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *cmsSystemEventContactGroupAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).cmsClient
 }
 
-func (r *cmsSystemEventGroupBindingResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan *cmsSystemEventGroupBindingResourceModel
+func (r *cmsSystemEventContactGroupAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan *cmsSystemEventContactGroupAttachmentResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -79,7 +79,7 @@ func (r *cmsSystemEventGroupBindingResource) Create(ctx context.Context, req res
 		return
 	}
 
-	state := &cmsSystemEventGroupBindingResourceModel{}
+	state := &cmsSystemEventContactGroupAttachmentResourceModel{}
 	state.RuleName = plan.RuleName
 	state.ContactGroupName = plan.ContactGroupName
 	state.Level = plan.Level
@@ -91,8 +91,8 @@ func (r *cmsSystemEventGroupBindingResource) Create(ctx context.Context, req res
 	}
 }
 
-func (r *cmsSystemEventGroupBindingResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state *cmsSystemEventGroupBindingResourceModel
+func (r *cmsSystemEventContactGroupAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state *cmsSystemEventContactGroupAttachmentResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -152,8 +152,8 @@ func (r *cmsSystemEventGroupBindingResource) Read(ctx context.Context, req resou
 	}
 }
 
-func (r *cmsSystemEventGroupBindingResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan *cmsSystemEventGroupBindingResourceModel
+func (r *cmsSystemEventContactGroupAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan *cmsSystemEventContactGroupAttachmentResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -168,7 +168,7 @@ func (r *cmsSystemEventGroupBindingResource) Update(ctx context.Context, req res
 		return
 	}
 
-	state := &cmsSystemEventGroupBindingResourceModel{}
+	state := &cmsSystemEventContactGroupAttachmentResourceModel{}
 	state.RuleName = plan.RuleName
 	state.ContactGroupName = plan.ContactGroupName
 	state.Level = plan.Level
@@ -180,11 +180,11 @@ func (r *cmsSystemEventGroupBindingResource) Update(ctx context.Context, req res
 	}
 }
 
-func (r *cmsSystemEventGroupBindingResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-
+func (r *cmsSystemEventContactGroupAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Since Alicloud does not provide an sdk for unbinding contact groups, the delete function will not be implemented.
 }
 
-func (r *cmsSystemEventGroupBindingResource) bindSystemEventGroup(plan *cmsSystemEventGroupBindingResourceModel) (err error) {
+func (r *cmsSystemEventContactGroupAttachmentResource) bindSystemEventGroup(plan *cmsSystemEventContactGroupAttachmentResourceModel) (err error) {
 	contactParameters := &alicloudCmsClient.PutEventRuleTargetsRequestContactParameters{
 		ContactGroupName: tea.String(plan.ContactGroupName.ValueString()),
 		Level:            tea.String(plan.Level.ValueString()),
