@@ -1,4 +1,4 @@
-resource st-alicloud_alidns_instance "dns_instance" {
+resource "st-alicloud_alidns_instance" "dns_instance" {
 	domain_numbers = 1
 	payment_type   = "Subscription"
 	period         = 1
