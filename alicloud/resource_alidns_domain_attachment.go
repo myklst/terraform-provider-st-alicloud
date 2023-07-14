@@ -114,14 +114,15 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 		return
 	}
 
-		readDomainRecord := func() (err error) {
+	dnsResp := &alicloudDnsClient.DescribeDomainInfoResponse{}
+	readDomainRecord := func() (err error) {
 		runtime := &util.RuntimeOptions{}
 
 		describeDomainInfoWithDomainRequest := &alicloudDnsClient.DescribeDomainInfoRequest{
 			DomainName: tea.String(state.Domain.ValueString()),
 		}
 
-		dnsResp, err := r.client.DescribeDomainInfoWithOptions(describeDomainInfoWithDomainRequest, runtime)
+		dnsResp, err = r.client.DescribeDomainInfoWithOptions(describeDomainInfoWithDomainRequest, runtime)
 		if err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*_t.Code) {
@@ -140,7 +141,6 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 			resp.State.RemoveResource(ctx)
 			return
 		}
-
 		return nil
 	}
 
@@ -152,6 +152,13 @@ func (r *alidnsDomainAttachmentResource) Read(ctx context.Context, req resource.
 			"[API ERROR] Failed to get domain info.",
 			err.Error(),
 		)
+		return
+	}
+
+	state.InstanceId = types.StringValue(*dnsResp.Body.InstanceId)
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 }
