@@ -103,6 +103,12 @@ scenario. The reason behind every resources and data sources are stated as below
   The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
   This may cause system event rule could create as usual but with an empty target contact group.
 
+
+- **st-alicloud_ddoscoo_webconfig_ssl_attachment**
+
+  This resource is designed to associate a SSL certificate to a website/domain before being added 
+  into Anti-DDoS as AliCloud Terraform Provider does not support the SSL binding operation. 
+  
 ### Data Sources
 
 - **st-alicloud_ddoscoo_domain_resources**
