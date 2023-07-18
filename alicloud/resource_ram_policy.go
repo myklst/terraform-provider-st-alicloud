@@ -418,10 +418,18 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 				handleAPIError(err)
 			}
 
-			if getPolicyResponse.Body.Policy != nil {
+			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
+				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+					policyDetail := policyDetail{
+						PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+						PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+					}
+					policyDetailsState = append(policyDetailsState, &policyDetail)
+				}
+			} else {
 				policyDetail := policyDetail{
-					PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-					PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+					PolicyName:     types.StringNull(),
+					PolicyDocument: types.StringNull(),
 				}
 				policyDetailsState = append(policyDetailsState, &policyDetail)
 			}

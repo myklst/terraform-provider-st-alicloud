@@ -7,7 +7,7 @@ require (
 	github.com/alibabacloud-go/cdn-20180510/v2 v2.0.9
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.4
 	github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0
-	github.com/alibabacloud-go/tea v1.1.20
+	github.com/alibabacloud-go/tea v1.2.1
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.1
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
 	github.com/hashicorp/terraform-plugin-framework-validators v0.10.0
