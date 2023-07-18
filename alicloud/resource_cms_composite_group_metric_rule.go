@@ -188,7 +188,7 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw != nil &&
 			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level != nil &&
 			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times != nil {
-				
+
 			alarm := alarmRuleResponse.Body.Alarms.Alarm[0]
 			groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
 
@@ -348,6 +348,19 @@ func (r *cmsAlarmRuleResource) setRule(ctx context.Context, plan *cmsAlarmRuleRe
 			},
 		}
 
+		_, _err := r.client.CreateGroupMetricRulesWithOptions(createGroupMetricRulesRequest, runtime)
+		if _err != nil {
+			if _t, ok := _err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return _err
+				} else {
+					return backoff.Permanent(_err)
+				}
+			} else {
+				return _err
+			}
+		}
+
 		putResourceMetricRuleRequest := &alicloudCmsClient.PutResourceMetricRuleRequest{
 			RuleId:        tea.String(ruleId),
 			RuleName:      tea.String(plan.RuleName.ValueString()),
@@ -360,19 +373,6 @@ func (r *cmsAlarmRuleResource) setRule(ctx context.Context, plan *cmsAlarmRuleRe
 				Level:         tea.String(plan.CompositeExpression.Level.ValueString()),
 				Times:         tea.Int32(int32(plan.CompositeExpression.Times.ValueInt64())),
 			},
-		}
-
-		_, _err := r.client.CreateGroupMetricRulesWithOptions(createGroupMetricRulesRequest, runtime)
-		if _err != nil {
-			if _t, ok := _err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return _err
-				} else {
-					return backoff.Permanent(_err)
-				}
-			} else {
-				return _err
-			}
 		}
 
 		_, err := r.client.PutResourceMetricRuleWithOptions(putResourceMetricRuleRequest, runtime)
