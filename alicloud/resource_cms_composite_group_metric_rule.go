@@ -184,18 +184,23 @@ func (r *cmsAlarmRuleResource) Read(ctx context.Context, req resource.ReadReques
 
 		totalRules, _ := strconv.ParseInt(*alarmRuleResponse.Body.Total, 10, 64)
 
-		if totalRules > 0 {
+		if totalRules > 0 &&
+			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw != nil &&
+			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level != nil &&
+			alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times != nil {
+				
+			alarm := alarmRuleResponse.Body.Alarms.Alarm[0]
 			groupId, _ := strconv.ParseInt(*alarmRuleResponse.Body.Alarms.Alarm[0].GroupId, 10, 64)
 
-			state.RuleName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].RuleName)
-			state.Namespace = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].Namespace)
-			state.MetricName = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].MetricName)
-			state.ContactGroups = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].ContactGroups)
+			state.RuleName = types.StringValue(*alarm.RuleName)
+			state.Namespace = types.StringValue(*alarm.Namespace)
+			state.MetricName = types.StringValue(*alarm.MetricName)
+			state.ContactGroups = types.StringValue(*alarm.ContactGroups)
 			state.GroupId = types.Int64Value(groupId)
 
-			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.ExpressionRaw)
-			state.CompositeExpression.Level = types.StringValue(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Level)
-			state.CompositeExpression.Times = types.Int64Value(int64(*alarmRuleResponse.Body.Alarms.Alarm[0].CompositeExpression.Times))
+			state.CompositeExpression.ExpressionRaw = types.StringValue(*alarm.CompositeExpression.ExpressionRaw)
+			state.CompositeExpression.Level = types.StringValue(*alarm.CompositeExpression.Level)
+			state.CompositeExpression.Times = types.Int64Value(int64(*alarm.CompositeExpression.Times))
 
 			// Set refreshed state
 			setStateDiags := resp.State.Set(ctx, &state)
