@@ -386,7 +386,6 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 				"policy_document": types.StringValue(policies),
 			},
 		)
-
 		policiesList = append(policiesList, policyObj)
 	}
 
@@ -443,8 +442,8 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 		}
 	}
 
-	state = &ramPolicyResourceModel{}
 	if len(policyDetailsState) > 0 {
+		state = &ramPolicyResourceModel{}
 		for _, policy := range policyDetailsState {
 			state.Policies = types.ListValueMust(
 				types.ObjectType{
@@ -467,6 +466,29 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 				},
 			)
 		}
+	} else {
+		state.AttachedPolicies = types.ListNull(types.StringType)
+		state.Policies = types.ListValueMust(
+			types.ObjectType{
+				AttrTypes: map[string]attr.Type{
+					"policy_name":     types.StringType,
+					"policy_document": types.StringType,
+				},
+			},
+			[]attr.Value{
+				types.ObjectValueMust(
+					map[string]attr.Type{
+						"policy_name":     types.StringType,
+						"policy_document": types.StringType,
+					},
+					map[string]attr.Value{
+						"policy_name":     types.StringNull(),
+						"policy_document": types.StringNull(),
+					},
+				),
+			},
+		)
+		state.UserName = types.StringNull()
 	}
 
 	return nil
