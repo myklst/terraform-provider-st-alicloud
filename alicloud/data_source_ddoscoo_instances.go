@@ -3,7 +3,9 @@ package alicloud
 import (
 	"context"
 	"regexp"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -28,9 +30,9 @@ type ddoscooInstancesDataSource struct {
 }
 
 type ddoscooInstancesDataSourceModel struct {
-	Remark    types.String                 `tfsdk:"remark_regex"`
-	IDs       types.List                   `tfsdk:"ids"`
-	Instances []*antiddosCooInstance       `tfsdk:"instances"`
+	Remark    types.String           `tfsdk:"remark_regex"`
+	IDs       types.List             `tfsdk:"ids"`
+	Instances []*antiddosCooInstance `tfsdk:"instances"`
 }
 
 type antiddosCooInstance struct {
@@ -171,10 +173,6 @@ func (d *ddoscooInstancesDataSource) Read(ctx context.Context, req datasource.Re
 	state.Remark = plan.Remark
 	state.Instances = []*antiddosCooInstance{}
 
-	var antiddosInstances *alicloudAntiddosClient.DescribeInstancesResponse
-	var antiddosInstanceSpecs *alicloudAntiddosClient.DescribeInstanceSpecsResponse
-	var antiddosInstanceDetails *alicloudAntiddosClient.DescribeInstanceDetailsResponse
-
 	describeInstancesRequest := &alicloudAntiddosClient.DescribeInstancesRequest{
 		PageNumber: tea.String("1"),
 		PageSize:   tea.String("20"),
@@ -184,166 +182,132 @@ func (d *ddoscooInstancesDataSource) Read(ctx context.Context, req datasource.Re
 
 	var nameRegex *regexp.Regexp
 
-	runtime := &util.RuntimeOptions{}
-
-	if !(plan.IDs.IsNull() || plan.IDs.IsUnknown()) {
-		// Plan ID List to List of String
-		var planIdsList []string
-		for _, x := range plan.IDs.Elements() {
-			planIdsList = append(planIdsList, trimStringQuotes(x.String()))
-		}
-
-		describeInstancesRequest.InstanceIds = tea.StringSlice(planIdsList)
-	}
-
-	if !(plan.Remark.IsNull() || plan.Remark.IsUnknown()) {
-		// Convert Remark Input to Regex
-		v := plan.Remark.ValueString()
-		if r, err := regexp.Compile(v); err != nil {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Convert Remark Input to Regex",
-				err.Error(),
-			)
-			return
-		} else {
-			nameRegex = r
-		}
-	}
-
 	// Describe Instances
-	if descInstancesErr := func() (_e error) {
-		defer func() {
-			if r := tea.Recover(recover()); r != nil {
-				_e = r
-			}
-		}()
+	readInstances := func() error {
+		runtime := &util.RuntimeOptions{}
 
-		var err error
-		if antiddosInstances, err = d.client.DescribeInstancesWithOptions(describeInstancesRequest, runtime); err != nil {
-			return err
+		if !(plan.IDs.IsNull() || plan.IDs.IsUnknown()) {
+			// Plan ID List to List of String
+			var planIdsList []string
+			for _, x := range plan.IDs.Elements() {
+				planIdsList = append(planIdsList, trimStringQuotes(x.String()))
+			}
+
+			describeInstancesRequest.InstanceIds = tea.StringSlice(planIdsList)
+		}
+
+		if !(plan.Remark.IsNull() || plan.Remark.IsUnknown()) {
+			// Convert Remark Input to Regex
+			v := plan.Remark.ValueString()
+			if r, err := regexp.Compile(v); err != nil {
+				resp.Diagnostics.AddError(
+					"[API ERROR] Failed to Convert Remark Input to Regex",
+					err.Error(),
+				)
+			} else {
+				nameRegex = r
+			}
+		}
+
+		// Describe Instances List
+		antiddosInstances, err := d.client.DescribeInstancesWithOptions(describeInstancesRequest, runtime)
+		if err != nil {
+			if _t, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return err
+				} else {
+					return backoff.Permanent(err)
+				}
+			} else {
+				return err
+			}
+		}
+
+		var antiddosInstancesList []string
+		if *antiddosInstances.Body.TotalCount > int64(0) {
+
+			for _, instances := range antiddosInstances.Body.Instances {
+				// Regex Filter
+				if nameRegex != nil && !(nameRegex.MatchString(*instances.Remark)) {
+					continue
+				}
+				antiddosInstancesList = append(antiddosInstancesList, *instances.InstanceId)
+			}
+
+			// Describe Instance Specs
+			describeInstanceSpecsRequest.InstanceIds = tea.StringSlice(antiddosInstancesList)
+			antiddosInstanceSpecs, err := d.client.DescribeInstanceSpecsWithOptions(describeInstanceSpecsRequest, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok {
+					if isAbleToRetry(*_t.Code) {
+						return err
+					} else {
+						return backoff.Permanent(err)
+					}
+				} else {
+					return err
+				}
+			}
+
+			// Describe Instance Details
+			describeInstanceDetailsRequest.InstanceIds = tea.StringSlice(antiddosInstancesList)
+			antiddosInstanceDetails, err := d.client.DescribeInstanceDetailsWithOptions(describeInstanceDetailsRequest, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok {
+					if isAbleToRetry(*_t.Code) {
+						return err
+					} else {
+						return backoff.Permanent(err)
+					}
+				} else {
+					return err
+				}
+			}
+
+			// Assign all values into instances
+			for i := 0; i < len(antiddosInstancesList); i++ {
+
+				var instanceEipList []attr.Value
+				for _, instanceDetailsEip := range antiddosInstanceDetails.Body.InstanceDetails[i].EipInfos {
+					instanceEipList = append(instanceEipList, types.StringValue(*instanceDetailsEip.Eip))
+				}
+
+				instanceDetail := &antiddosCooInstance{
+					ID:               types.StringValue(antiddosInstancesList[i]),
+					Name:             types.StringValue(*antiddosInstances.Body.Instances[i].Remark),
+					BaseBandwidth:    types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].BaseBandwidth)),
+					Bandwidth:        types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].ElasticBandwidth)),
+					ServiceBandwidth: types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].BandwidthMbps)),
+					PortCount:        types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].PortLimit)),
+					DomainCount:      types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].DomainLimit)),
+					Remark:           types.StringValue(*antiddosInstances.Body.Instances[i].Remark),
+					IpMode:           types.StringValue(*antiddosInstances.Body.Instances[i].IpMode),
+					DebtStatus:       types.Int64Value(int64(*antiddosInstances.Body.Instances[i].DebtStatus)),
+					Edition:          types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Edition)),
+					IpVersion:        types.StringValue(*antiddosInstances.Body.Instances[i].IpVersion),
+					Status:           types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Status)),
+					Enabled:          types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Enabled)),
+					ExpireTime:       types.Int64Value(*antiddosInstances.Body.Instances[i].ExpireTime),
+					CreateTime:       types.Int64Value(*antiddosInstances.Body.Instances[i].CreateTime),
+					Eip:              types.ListValueMust(types.StringType, instanceEipList),
+				}
+				state.Instances = append(state.Instances, instanceDetail)
+			}
 		}
 		return nil
-	}(); descInstancesErr != nil {
-		var error = &tea.SDKError{}
-		if _t, ok := descInstancesErr.(*tea.SDKError); ok {
-			error = _t
-		} else {
-			error.Message = tea.String(descInstancesErr.Error())
-		}
-
-		if _, err := util.AssertAsString(error.Message); err != nil {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Describe AntiDDoS Instances",
-				err.Error(),
-			)
-			return
-		}
 	}
 
-	var antiddosInstancesList []string
-	if antiddosInstances.String() != "{}" && *antiddosInstances.Body.TotalCount > int64(0) {
+	// Retry backoff
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 60 * time.Second
 
-		for _, instances := range antiddosInstances.Body.Instances {
-			// Regex Filter
-			if nameRegex != nil && !(nameRegex.MatchString(*instances.Remark)) {
-				continue
-			}
-			antiddosInstancesList = append(antiddosInstancesList, *instances.InstanceId)
-		}
-
-		// Describe Instance Specs
-		describeInstanceSpecsRequest.InstanceIds = tea.StringSlice(antiddosInstancesList)
-		if descSpecsErr := func() (_e error) {
-			defer func() {
-				if r := tea.Recover(recover()); r != nil {
-					_e = r
-				}
-			}()
-
-			var err error
-			if antiddosInstanceSpecs, err = d.client.DescribeInstanceSpecsWithOptions(describeInstanceSpecsRequest, runtime);
-				err != nil {
-				return err
-			}
-			return nil
-		}(); descSpecsErr != nil {
-			var error = &tea.SDKError{}
-			if _t, ok := descSpecsErr.(*tea.SDKError); ok {
-				error = _t
-			} else {
-				error.Message = tea.String(descSpecsErr.Error())
-			}
-
-			if _, err := util.AssertAsString(error.Message); err != nil {
-				resp.Diagnostics.AddError(
-					"[API ERROR] Failed to Describe AntiDDoS Instance Specs",
-					err.Error(),
-				)
-				return
-			}
-		}
-
-		// Describe Instance Details
-		describeInstanceDetailsRequest.InstanceIds = tea.StringSlice(antiddosInstancesList)
-		if descDetailsErr := func() (_e error) {
-			defer func() {
-				if r := tea.Recover(recover()); r != nil {
-					_e = r
-				}
-			}()
-
-			var err error
-			if antiddosInstanceDetails, err = d.client.DescribeInstanceDetailsWithOptions(describeInstanceDetailsRequest, runtime);
-				err != nil {
-				return err
-			}
-			return nil
-		}(); descDetailsErr != nil {
-			var error = &tea.SDKError{}
-			if _t, ok := descDetailsErr.(*tea.SDKError); ok {
-				error = _t
-			} else {
-				error.Message = tea.String(descDetailsErr.Error())
-			}
-
-			if _, err := util.AssertAsString(error.Message); err != nil {
-				resp.Diagnostics.AddError(
-					"[API ERROR] Failed to Describe AntiDDoS Instance Details",
-					err.Error(),
-				)
-				return
-			}
-		}
-
-		// Assign all values into instances
-		for i := 0; i < len(antiddosInstancesList); i++ {
-
-			var instanceEipList []attr.Value
-			for _, instanceDetailsEip := range antiddosInstanceDetails.Body.InstanceDetails[i].EipInfos {
-				instanceEipList = append(instanceEipList, types.StringValue(*instanceDetailsEip.Eip))
-			}
-
-			instanceDetail := &antiddosCooInstance{
-				ID:               types.StringValue(antiddosInstancesList[i]),
-				Name:             types.StringValue(*antiddosInstances.Body.Instances[i].Remark),
-				BaseBandwidth:    types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].BaseBandwidth)),
-				Bandwidth:        types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].ElasticBandwidth)),
-				ServiceBandwidth: types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].BandwidthMbps)),
-				PortCount:        types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].PortLimit)),
-				DomainCount:      types.Int64Value(int64(*antiddosInstanceSpecs.Body.InstanceSpecs[i].DomainLimit)),
-				Remark:           types.StringValue(*antiddosInstances.Body.Instances[i].Remark),
-				IpMode:           types.StringValue(*antiddosInstances.Body.Instances[i].IpMode),
-				DebtStatus:       types.Int64Value(int64(*antiddosInstances.Body.Instances[i].DebtStatus)),
-				Edition:          types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Edition)),
-				IpVersion:        types.StringValue(*antiddosInstances.Body.Instances[i].IpVersion),
-				Status:           types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Status)),
-				Enabled:          types.Int64Value(int64(*antiddosInstances.Body.Instances[i].Enabled)),
-				ExpireTime:       types.Int64Value(*antiddosInstances.Body.Instances[i].ExpireTime),
-				CreateTime:       types.Int64Value(*antiddosInstances.Body.Instances[i].CreateTime),
-				Eip:              types.ListValueMust(types.StringType, instanceEipList),
-			}
-			state.Instances = append(state.Instances, instanceDetail)
-		}
+	err := backoff.Retry(readInstances, reconnectBackoff)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to read Anti-DDoS Instances",
+			err.Error(),
+		)
+		return
 	}
 
 	diags = resp.State.Set(ctx, &state)
