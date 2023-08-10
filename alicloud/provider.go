@@ -2,6 +2,7 @@ package alicloud
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -19,6 +20,7 @@ import (
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
+	"github.com/alibabacloud-go/tea/tea"
 )
 
 // Wrapper of AliCloud client
