@@ -3,6 +3,7 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -541,6 +542,7 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 }
 
 func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (finalPolicyDocument []string, err error) {
+	policyName := ""
 	currentLength := 0
 	currentPolicyDocument := ""
 	appendedPolicyDocument := make([]string, 0)
@@ -549,9 +551,10 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 
 	for i, policy := range plan.AttachedPolicies.Elements() {
+		policyName = policy.String()
 		getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
 			PolicyType: tea.String("Custom"),
-			PolicyName: tea.String(trimStringQuotes(policy.String())),
+			PolicyName: tea.String(trimStringQuotes(policyName)),
 		}
 
 		getPolicy := func() error {
@@ -583,53 +586,61 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 		reconnectBackoff.MaxElapsedTime = 30 * time.Second
 		backoff.Retry(getPolicy, reconnectBackoff)
 
-		tempPolicyDocument := *getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument
+		if getPolicyResponse.Body != nil && getPolicyResponse.Body.DefaultPolicyVersion != nil {
+			if getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+				tempPolicyDocument := *getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument
 
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(tempPolicyDocument), &data); err != nil {
-			return nil, err
-		}
+				var data map[string]interface{}
+				if err := json.Unmarshal([]byte(tempPolicyDocument), &data); err != nil {
+					return nil, err
+				}
 
-		statementArr := data["Statement"].([]interface{})
-		statementBytes, err := json.MarshalIndent(statementArr, "", "  ")
-		if err != nil {
-			return nil, err
-		}
+				statementArr := data["Statement"].([]interface{})
+				statementBytes, err := json.MarshalIndent(statementArr, "", "  ")
+				if err != nil {
+					return nil, err
+				}
 
-		removeSpaces := strings.ReplaceAll(string(statementBytes), " ", "")
-		replacer := strings.NewReplacer("\n", "")
-		removeParagraphs := replacer.Replace(removeSpaces)
+				removeSpaces := strings.ReplaceAll(string(statementBytes), " ", "")
+				replacer := strings.NewReplacer("\n", "")
+				removeParagraphs := replacer.Replace(removeSpaces)
 
-		finalStatement := strings.Trim(removeParagraphs, "[]")
+				finalStatement := strings.Trim(removeParagraphs, "[]")
 
-		currentLength += len(finalStatement)
+				currentLength += len(finalStatement)
 
-		// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
-		// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
-		if (currentLength + 30) > maxLength {
-			lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
-			if lastCommaIndex >= 0 {
-				currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
+				// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
+				// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
+				if (currentLength + 30) > maxLength {
+					lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
+					if lastCommaIndex >= 0 {
+						currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
+					}
+
+					appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
+					currentPolicyDocument = finalStatement + ","
+					currentLength = len(finalStatement)
+				} else {
+					currentPolicyDocument += finalStatement + ","
+				}
+
+				if i == len(plan.AttachedPolicies.Elements())-1 && (currentLength+30) <= maxLength {
+					lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
+					if lastCommaIndex >= 0 {
+						currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
+					}
+					appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
+				}
 			}
-
-			appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
-			currentPolicyDocument = finalStatement + ","
-			currentLength = len(finalStatement)
 		} else {
-			currentPolicyDocument += finalStatement + ","
-		}
-
-		if i == len(plan.AttachedPolicies.Elements())-1 && (currentLength+30) <= maxLength {
-			lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
-			if lastCommaIndex >= 0 {
-				currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
-			}
-			appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
+			return nil, errors.New(fmt.Sprintf("The %v policy not found.", policyName))
 		}
 	}
 
-	for _, policy := range appendedPolicyDocument {
-		finalPolicyDocument = append(finalPolicyDocument, fmt.Sprintf(`{"Version":"1","Statement":[%v]}`, policy))
+	if len(appendedPolicyDocument) > 0 {
+		for _, policy := range appendedPolicyDocument {
+			finalPolicyDocument = append(finalPolicyDocument, fmt.Sprintf(`{"Version":"1","Statement":[%v]}`, policy))
+		}
 	}
 
 	return finalPolicyDocument, nil
