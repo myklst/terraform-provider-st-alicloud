@@ -247,11 +247,11 @@ func (d *slbLoadBalancersDataSource) Read(ctx context.Context, req datasource.Re
 					// if key not found.
 					value, ok := slbTagQuried[inputTagKey]
 					if ok {
-						// '|' is assumed as string delimiter, split them to a list of string
+						// '/' is assumed as string delimiter, split them to a list of string
 						// and compare with the input tag value, break if none of it are matched
-						if strings.Contains(value, "|") {
+						if strings.Contains(value, "/") {
 							matched := false
-							tagList := strings.Split(value, "|")
+							tagList := strings.Split(value, "/")
 							for _, t := range tagList {
 								if t == inputTagValue {
 									matched = true
