@@ -183,6 +183,19 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
+	// This state will be using to compare with the current state.
+	var oriState *ramPolicyResourceModel
+	getOriStateDiags := req.State.Get(ctx, &oriState)
+	resp.Diagnostics.Append(getOriStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
+		resp.Diagnostics.AddWarning("Combined policies not found.", "The combined policies attached to the user may be deleted due to human mistake or API error.")
+		state.AttachedPolicies = types.ListNull(types.StringType)
+	}
+
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -418,6 +431,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 				handleAPIError(err)
 			}
 
+			// Sometimes combined policies may be removed accidentally by human mistake or API error.
 			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
 				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
 					policyDetail := policyDetail{
@@ -443,55 +457,28 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 		}
 	}
 
-	if len(policyDetailsState) > 0 {
-		state = &ramPolicyResourceModel{}
-		for _, policy := range policyDetailsState {
-			state.Policies = types.ListValueMust(
-				types.ObjectType{
-					AttrTypes: map[string]attr.Type{
-						"policy_name":     types.StringType,
-						"policy_document": types.StringType,
-					},
-				},
-				[]attr.Value{
-					types.ObjectValueMust(
-						map[string]attr.Type{
-							"policy_name":     types.StringType,
-							"policy_document": types.StringType,
-						},
-						map[string]attr.Value{
-							"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
-							"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
-						},
-					),
-				},
-			)
-		}
-	} else {
-		if len(state.Policies.Elements()) > 0 {
-			state.AttachedPolicies = types.ListNull(types.StringType)
-			state.Policies = types.ListValueMust(
-				types.ObjectType{
-					AttrTypes: map[string]attr.Type{
-						"policy_name":     types.StringType,
-						"policy_document": types.StringType,
-					},
-				},
-				[]attr.Value{
-					types.ObjectValueMust(
-						map[string]attr.Type{
-							"policy_name":     types.StringType,
-							"policy_document": types.StringType,
-						},
-						map[string]attr.Value{
-							"policy_name":     types.StringNull(),
-							"policy_document": types.StringNull(),
-						},
-					),
-				},
-			)
-		}
+	policyDetails := []attr.Value{}
+	for _, policy := range policyDetailsState {
+		policyDetails = append(policyDetails, types.ObjectValueMust(
+			map[string]attr.Type{
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
+			},
+			map[string]attr.Value{
+				"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
+				"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
+			},
+		))
 	}
+	state.Policies = types.ListValueMust(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
+			},
+		},
+		policyDetails,
+	)
 	return nil
 }
 
