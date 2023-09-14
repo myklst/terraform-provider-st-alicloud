@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
 	alicloudDnsClient "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	alicloudBaseClient "github.com/alibabacloud-go/bssopenapi-20171214/v3/client"
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
@@ -32,6 +33,7 @@ type alicloudClients struct {
 	dnsClient      *alicloudDnsClient.Client
 	ramClient      *alicloudRamClient.Client
 	cmsClient      *alicloudCmsClient.Client
+	adbClient      *alicloudAdbClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -290,6 +292,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud ADB Client
+	adbClientConfig := clientCredentialsConfig
+	adbClientConfig.Endpoint = tea.String("adb.aliyuncs.com")
+	adbClient, err := alicloudAdbClient.NewClient(adbClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud ADB API Client",
+			"An unexpected error occurred when creating the AliCloud ADB API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud ADB Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:     baseClient,
@@ -299,6 +316,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		dnsClient:      dnsClient,
 		ramClient:      ramClient,
 		cmsClient:      cmsClient,
+		adbClient:      adbClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -325,5 +343,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAlidnsInstanceResource,
 		NewCmsSystemEventContactGroupAttachmentResource,
 		NewDdosCooWebconfigSslAttachmentResource,
+		NewAliadbResourceGroupBindResource,
 	}
 }

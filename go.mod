@@ -8,14 +8,16 @@ require (
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.4
 	github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0
 	github.com/alibabacloud-go/tea v1.2.1
-	github.com/alibabacloud-go/tea-utils/v2 v2.0.1
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.4
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
 	github.com/hashicorp/terraform-plugin-framework-validators v0.10.0
 )
 
 require (
+	github.com/alibabacloud-go/adb-20190315/v2 v2.1.2
 	github.com/alibabacloud-go/bssopenapi-20171214/v3 v3.0.2
 	github.com/alibabacloud-go/slb-20140515/v4 v4.0.1
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/terraform-plugin-docs v0.14.1
 )
