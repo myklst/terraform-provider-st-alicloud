@@ -2,7 +2,9 @@ package alicloud
 
 import (
 	"context"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -127,43 +129,40 @@ func (d *ddoscooDomainResourcesDataSource) Read(ctx context.Context, req datasou
 		return
 	}
 
-	var antiddosCooWebRules *alicloudAntiddosClient.DescribeWebRulesResponse
-	var err error
 	describeWebRulesRequest := &alicloudAntiddosClient.DescribeWebRulesRequest{
 		Domain:   tea.String(domainName),
 		PageSize: tea.Int32(10),
 	}
-	runtime := &util.RuntimeOptions{}
-	tryErr := func() (_e error) {
-		defer func() {
-			if r := tea.Recover(recover()); r != nil {
-				_e = r
-			}
-		}()
+
+	var antiddosCooWebRules *alicloudAntiddosClient.DescribeWebRulesResponse
+	var err error
+	describeWebRules := func() (err error) {
+		runtime := &util.RuntimeOptions{}
 
 		antiddosCooWebRules, err = d.client.DescribeWebRulesWithOptions(describeWebRulesRequest, runtime)
 		if err != nil {
-			return err
+			if _t, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return err
+				} else {
+					return backoff.Permanent(err)
+				}
+			} else {
+				return err
+			}
 		}
-		return nil
-	}()
+		return
+	}
 
-	if tryErr != nil {
-		var error = &tea.SDKError{}
-		if _t, ok := tryErr.(*tea.SDKError); ok {
-			error = _t
-		} else {
-			error.Message = tea.String(tryErr.Error())
-		}
-
-		_, err := util.AssertAsString(error.Message)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to query AntiDDoS web rules",
-				err.Error(),
-			)
-			return
-		}
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(describeWebRules, reconnectBackoff)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Describe Antiddos Web Rule.",
+			err.Error(),
+		)
+		return
 	}
 
 	if antiddosCooWebRules.String() != "{}" && *antiddosCooWebRules.Body.TotalCount > int64(0) {

@@ -2,7 +2,9 @@ package alicloud
 
 import (
 	"context"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -134,43 +136,42 @@ func (d *cdnDomainDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	var cdnDomains *alicloudCdnClient.DescribeCdnDomainDetailResponse
-	var err error
 	describeCdnDomainDetailRequest := &alicloudCdnClient.DescribeCdnDomainDetailRequest{
 		DomainName: tea.String(domainName),
 	}
-	runtime := &util.RuntimeOptions{}
-	tryErr := func() (_e error) {
-		defer func() {
-			if r := tea.Recover(recover()); r != nil {
-				_e = r
-			}
-		}()
+
+	var cdnDomains *alicloudCdnClient.DescribeCdnDomainDetailResponse
+	var err error
+	describeCdnDomain := func() (err error) {
+		runtime := &util.RuntimeOptions{}
 
 		cdnDomains, err = d.client.DescribeCdnDomainDetailWithOptions(describeCdnDomainDetailRequest, runtime)
 		if err != nil {
-			return err
+			if _t, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return err
+				} else if *_t.Code == *tea.String("InvalidDomain.NotFound") {
+					return nil
+				} else {
+					return backoff.Permanent(err)
+				}
+			} else {
+				return err
+			}
 		}
+		return
+	}
 
-		return nil
-	}()
-
-	if tryErr != nil {
-		var error = &tea.SDKError{}
-		if _t, ok := tryErr.(*tea.SDKError); ok {
-			error = _t
-		} else {
-			error.Message = tea.String(tryErr.Error())
-		}
-
-		_, err := util.AssertAsString(error.Message)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Query CDN Domains",
-				err.Error(),
-			)
-			return
-		}
+	// Retry backoff
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(describeCdnDomain, reconnectBackoff)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Describe CDN Domain",
+			err.Error(),
+		)
+		return
 	}
 
 	if cdnDomains.String() != "{}" {
