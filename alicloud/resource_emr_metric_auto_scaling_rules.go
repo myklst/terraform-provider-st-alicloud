@@ -272,6 +272,13 @@ func (r *emrMetricAutoScalingRulesResource) Read(ctx context.Context, req resour
 		NodeGroupId:  types.StringValue(*autoScalingPolicy.Body.ScalingPolicy.NodeGroupId),
 		ScalingRule:  scalingRules,
 	}
+
+	// Set state to fully populated data
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 // Update binds new SSL cert to domain and sets the updated Terraform state on success.
