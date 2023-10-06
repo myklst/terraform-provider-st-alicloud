@@ -18,8 +18,10 @@ import (
 	alicloudCmsClient "github.com/alibabacloud-go/cms-20190101/v8/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
+	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
+
 	"github.com/alibabacloud-go/tea/tea"
 )
 
@@ -32,6 +34,7 @@ type alicloudClients struct {
 	dnsClient      *alicloudDnsClient.Client
 	ramClient      *alicloudRamClient.Client
 	cmsClient      *alicloudCmsClient.Client
+	emrClient      *alicloudEmrClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -290,6 +293,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud EMR Client
+	emrClientConfig := clientCredentialsConfig
+	emrClientConfig.Endpoint = tea.String(fmt.Sprintf("emr.%s.aliyuncs.com", region))
+	emrClient, err := alicloudEmrClient.NewClient(emrClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud EMR API Client",
+			"An unexpected error occurred when creating the AliCloud EMR API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud EMR Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:     baseClient,
@@ -299,6 +317,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		dnsClient:      dnsClient,
 		ramClient:      ramClient,
 		cmsClient:      cmsClient,
+		emrClient:      emrClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -325,5 +344,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAlidnsInstanceResource,
 		NewCmsSystemEventContactGroupAttachmentResource,
 		NewDdosCooWebconfigSslAttachmentResource,
+		NewEmrMetricAutoScalingRulesResource,
 	}
 }
