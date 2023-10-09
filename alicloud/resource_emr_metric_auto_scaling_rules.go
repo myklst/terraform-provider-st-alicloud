@@ -8,8 +8,10 @@ import (
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
@@ -74,11 +76,11 @@ func (r *emrMetricAutoScalingRulesResource) Schema(_ context.Context, _ resource
 			},
 			"max_nodes": schema.Int64Attribute{
 				Description: "Maximum capacity of scaling for nodes.",
-				Optional:    true,
+				Required:    true,
 			},
 			"min_nodes": schema.Int64Attribute{
 				Description: "Minimum capacity of scaling for nodes.",
-				Optional:    true,
+				Required:    true,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -92,20 +94,26 @@ func (r *emrMetricAutoScalingRulesResource) Schema(_ context.Context, _ resource
 						"multi_metric_relationship": schema.StringAttribute{
 							Description: "Determines whether auto scaling triggers when all metrics trigger (And) or any metrics are triggered (Or). Accepted Values: \"And\", \"Or\".",
 							Required:    true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("And", "Or"),
+							},
 						},
-						"statistical_period": schema.StringAttribute{
+						"statistical_period": schema.Int64Attribute{
 							Description: "Period to collect cluster load metrics.",
 							Required:    true,
 						},
-						"evaluation_count": schema.StringAttribute{
-							Description: "Amount of times scaling is triggered.",
+						"evaluation_count": schema.Int64Attribute{
+							Description: "Amount of times scaling is triggered. (Repetitions that trigger scale out.)",
 							Required:    true,
 						},
 						"scale_operation": schema.StringAttribute{
 							Description: "Scaling mode, scale out (up) or scale in (down). Accepted values: \"SCALE_OUT\", \"SCALE_IN\"",
 							Required:    true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("SCALE_OUT", "SCALE_IN"),
+							},
 						},
-						"scaling_node_count": schema.StringAttribute{
+						"scaling_node_count": schema.Int64Attribute{
 							Description: "Number of nodes being scaled up or down.",
 							Required:    true,
 						},
@@ -125,10 +133,16 @@ func (r *emrMetricAutoScalingRulesResource) Schema(_ context.Context, _ resource
 									"comparison_operator": schema.StringAttribute{
 										Description: "Comparison operator. Accepted values: \"EQ\": equals, \"NE\": not equals, \"GT\": greater than, \"LT\": lesser than, \"GE\": greater or equal, \"LE\": lesser or equal.",
 										Required:    true,
+										Validators: []validator.String{
+											stringvalidator.OneOf("EQ", "NE", "GT", "LT", "GE", "LE"),
+										},
 									},
 									"statistical_measure": schema.StringAttribute{
 										Description: "Statistical measure. Accepted values: \"AVG\", \"MIN\", \"MAX\".",
 										Required:    true,
+										Validators: []validator.String{
+											stringvalidator.OneOf("AVG", "MIN", "MAX"),
+										},
 									},
 									"threshold": schema.Float64Attribute{
 										Description: "Threshold percentage of metric to trigger auto scaling.",
@@ -293,7 +307,16 @@ func (r *emrMetricAutoScalingRulesResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	err := r.putRule(plan)
+	nodeGroupId, err := r.getNodeGroup(plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[ERROR] Failed to get node group",
+			err.Error(),
+		)
+		return
+	}
+
+	err = r.putRule(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[ERROR] Failed to update auto scaling rules.",
@@ -303,6 +326,7 @@ func (r *emrMetricAutoScalingRulesResource) Update(ctx context.Context, req reso
 	}
 
 	state = plan
+	state.NodeGroupId = types.StringValue(nodeGroupId)
 
 	// Set state to fully populated data
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -401,14 +425,11 @@ func (r *emrMetricAutoScalingRulesResource) putRule(plan *emrMetricAutoScalingRu
 
 	putRule := func() error {
 		runtime := &util.RuntimeOptions{}
-		var scalingConstraints *alicloudEmrClient.ScalingConstraints
 		var scalingRules []*alicloudEmrClient.ScalingRule
 
-		if !plan.MaximumNodes.IsNull() {
-			scalingConstraints.MaxCapacity = tea.Int32(int32(plan.MaximumNodes.ValueInt64()))
-		}
-		if !plan.MinimumNodes.IsNull() {
-			scalingConstraints.MinCapacity = tea.Int32(int32(plan.MinimumNodes.ValueInt64()))
+		scalingConstraints := &alicloudEmrClient.ScalingConstraints{
+			MaxCapacity: tea.Int32(int32(plan.MaximumNodes.ValueInt64())),
+			MinCapacity: tea.Int32(int32(plan.MinimumNodes.ValueInt64())),
 		}
 
 		for _, scale := range plan.ScalingRule {

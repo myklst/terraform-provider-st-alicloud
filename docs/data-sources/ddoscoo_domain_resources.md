@@ -38,12 +38,6 @@ data "st-alicloud_ddoscoo_domain_resources" "def" {
 
 Optional:
 
-- `region` (String) The region of the AntiDDoS. Default to use region configured in the provider.
 - `access_key` (String) The access key that have permissions to list AntiDDoS domain resources. Default to use access key configured in the provider.
+- `region` (String) The region of the AntiDDoS. Default to use region configured in the provider.
 - `secret_key` (String) The secret key that have permissions to lsit AntiDDoS domain resources. Default to use secret key configured in the provider.
-
-Read-Only:
-
-- `zone` (String) This field will be ignored since AntiDDoS do not have zone.
-
-

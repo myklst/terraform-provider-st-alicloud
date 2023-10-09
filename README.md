@@ -103,11 +103,15 @@ scenario. The reason behind every resources and data sources are stated as below
   The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
   This may cause system event rule could create as usual but with an empty target contact group.
 
-
 - **st-alicloud_ddoscoo_webconfig_ssl_attachment**
 
   This resource is designed to associate a SSL certificate to a website/domain before being added
   into Anti-DDoS as AliCloud Terraform Provider does not support the SSL binding operation.
+
+- **st-alicloud_emr_metric_auto_scaling_rules**
+
+  This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
+  does not provide the option to create auto scaling rules for nodes. (Note: Only task nodes are eligible for auto scaling)
 
 ### Data Sources
 
