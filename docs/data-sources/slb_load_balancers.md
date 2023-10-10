@@ -50,10 +50,10 @@ output "slb_load_balancers" {
 
 Optional:
 
-- `region` (String) The region of the SLBs. Default to use region configured in the provider.
-- `zone` (String) The master zone of the SLBs.
 - `access_key` (String) The access key that have permissions to list SLBs. Default to use access key configured in the provider.
+- `region` (String) The region of the SLBs. Default to use region configured in the provider.
 - `secret_key` (String) The secret key that have permissions to lsit SLBs. Default to use secret key configured in the provider.
+- `zone` (String) The master zone of the SLBs.
 
 
 <a id="nestedatt--load_balancers"></a>

@@ -34,6 +34,8 @@ github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0 h1:LB78mRvBziY+3lINP9BgZYz
 github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0/go.mod h1:T7n6pi1xQwSQuqVC6N31ICEpfRoV0YtioJ0o/hdZzEE=
 github.com/alibabacloud-go/debug v0.0.0-20190504072949-9472017b5c68 h1:NqugFkGxx1TXSh/pBcU00Y6bljgDPaFdh5MUSeJ7e50=
 github.com/alibabacloud-go/debug v0.0.0-20190504072949-9472017b5c68/go.mod h1:6pb/Qy8c+lqua8cFpEy7g39NRRqOWc3rOwAy8m5Y2BY=
+github.com/alibabacloud-go/emr-20210320 v1.1.0 h1:AB+jhm2cEkqXq2bWr2Uz4LFe9Gz07pcO5/ZNKzrisRw=
+github.com/alibabacloud-go/emr-20210320 v1.1.0/go.mod h1:KNj6VyWDaCYI4Da6Ejf7GCbUn99XjJnBEiIbX+MVofk=
 github.com/alibabacloud-go/endpoint-util v1.1.0/go.mod h1:O5FuCALmCKs2Ff7JFJMudHs0I5EBgecXXxZRyswlEjE=
 github.com/alibabacloud-go/endpoint-util v1.1.1 h1:ZkBv2/jnghxtU0p+upSU0GGzW1VL9GQdZO3mcSUTUy8=
 github.com/alibabacloud-go/endpoint-util v1.1.1/go.mod h1:O5FuCALmCKs2Ff7JFJMudHs0I5EBgecXXxZRyswlEjE=

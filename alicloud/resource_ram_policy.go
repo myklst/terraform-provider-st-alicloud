@@ -3,7 +3,6 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -620,7 +619,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 				}
 			}
 		} else {
-			return nil, errors.New(fmt.Sprintf("The %v policy not found.", policyName))
+			return nil, fmt.Errorf("could not find the policy: %v", policyName)
 		}
 	}
 

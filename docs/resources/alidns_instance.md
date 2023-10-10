@@ -3,17 +3,17 @@
 page_title: "st-alicloud_alidns_instance Resource - st-alicloud"
 subcategory: ""
 description: |-
-  Provides a Alidns Instance resource.
+
 ---
 
 # st-alicloud_alidns_instance (Resource)
 
-Provides a Alidns Instance resource.
+
 
 ## Example Usage
 
 ```terraform
-resource st-alicloud_alidns_instance "dns_instance" {
+resource "st-alicloud_alidns_instance" "dns_instance" {
 	domain_numbers = 1
 	payment_type   = "Subscription"
 	period         = 1

@@ -3,18 +3,18 @@
 page_title: "st-alicloud_alidns_domain_attachment Resource - st-alicloud"
 subcategory: ""
 description: |-
-  Provides a Alidns domain attachment resource.
+
 ---
 
 # st-alicloud_alidns_domain_attachment (Resource)
 
-Provides a Alidns domain attachment resource.
+
 
 ## Example Usage
 
 ```terraform
-resource st-alicloud_alidns_domain_attachment "dns_attachment" {
-	instance_id = "dns-sg-vfp37q58i0w"
+resource "st-alicloud_alidns_domain_attachment" "dns_attachment" {
+	instance_id = "123456789012"
 	domain = "test.com"
 }
 ```
