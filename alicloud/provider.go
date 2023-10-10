@@ -295,16 +295,19 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-        // AliCloud ADB Client
-        adbClientConfig := clientCredentialsConfig
-        adbClientConfig.Endpoint = tea.String("adb.aliyuncs.com")
-        adbClient, err := alicloudAdbClient.NewClient(adbClientConfig)
+	// AliCloud ADB Client
+	adbClientConfig := clientCredentialsConfig
+	adbClientConfig.Endpoint = tea.String("adb.aliyuncs.com")
+	adbClient, err := alicloudAdbClient.NewClient(adbClientConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create AliCloud ADB API Client",
 			"An unexpected error occurred when creating the AliCloud ADB API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
 				"AliCloud ADB Client Error: "+err.Error(),
+		)
+		return
+	}
 
 	// AliCloud EMR Client
 	emrClientConfig := clientCredentialsConfig

@@ -108,6 +108,10 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to associate a SSL certificate to a website/domain before being added
   into Anti-DDoS as AliCloud Terraform Provider does not support the SSL binding operation.
 
+- **st-alicloud_aliadb_resource_group_bind_user**
+
+  This resource is to bind user to a resource group. Binding user to a resource group allow user access to different resource groups.
+
 - **st-alicloud_emr_metric_auto_scaling_rules**
 
   This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
