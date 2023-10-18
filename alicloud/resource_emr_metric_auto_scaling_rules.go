@@ -255,9 +255,10 @@ func (r *emrMetricAutoScalingRulesResource) Read(ctx context.Context, req resour
 		return
 	}
 
-	var metricRules []*metricRule
 	var scalingRules []*scalingRule
 	for _, scale := range autoScalingPolicy.Body.ScalingPolicy.ScalingRules {
+		var metricRules []*metricRule
+
 		for _, rule := range scale.MetricsTrigger.Conditions {
 			metricRules = append(metricRules, &metricRule{
 				MetricName:         types.StringValue(*rule.MetricName),
