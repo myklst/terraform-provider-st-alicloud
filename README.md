@@ -98,10 +98,11 @@ scenario. The reason behind every resources and data sources are stated as below
   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one together with
   the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
 
-- **st-alicloud_cms_system_event_contact_group_attachment *(FIXED BY ALICLOUD)***
+- ~~**st-alicloud_cms_system_event_contact_group_attachment**~~
 
-  The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
-  This may cause system event rule could create as usual but with an empty target contact group.
+  **Update:**
+  - The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) is fixed and currently supports the binding of the created system event rule to the contact group.
+  - Users are not encouraged to use this resource as it will no longer be maintained.
 
 - **st-alicloud_ddoscoo_webconfig_ssl_attachment**
 
