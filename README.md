@@ -98,7 +98,7 @@ scenario. The reason behind every resources and data sources are stated as below
   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one together with
   the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
 
-- **st-alicloud_cms_system_event_contact_group_attachment**
+- **st-alicloud_cms_system_event_contact_group_attachment *(FIXED BY ALICLOUD)***
 
   The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
   This may cause system event rule could create as usual but with an empty target contact group.
@@ -155,6 +155,13 @@ scenario. The reason behind every resources and data sources are stated as below
     |-----------------|-------------------------------------------------|-------------------------------------------------------------|
     | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
     | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the `env` is prod)        |
+
+  - Added client_config block to allow overriding the Provider configuration.
+
+- **st-alicloud_cs_user_kubeconfig**
+
+  - The original data source [*alicloud_cs_cluster_credential*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/data-sources/cs_cluster_credential) has limitations on the following configuration scenarios:
+    - Unable to query Kubeconfig of another RAM user using the same Terraform provider as it has different credentials.
 
   - Added client_config block to allow overriding the Provider configuration.
 

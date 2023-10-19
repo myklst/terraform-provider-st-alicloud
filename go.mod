@@ -58,6 +58,7 @@ require (
 require (
 	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.4 // indirect
 	github.com/alibabacloud-go/cms-20190101/v8 v8.0.1
+	github.com/alibabacloud-go/cs-20151215/v4 v4.0.5
 	github.com/alibabacloud-go/debug v0.0.0-20190504072949-9472017b5c68 // indirect
 	github.com/alibabacloud-go/emr-20210320 v1.1.0
 	github.com/alibabacloud-go/endpoint-util v1.1.1 // indirect
