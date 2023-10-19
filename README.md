@@ -100,6 +100,9 @@ scenario. The reason behind every resources and data sources are stated as below
 
 - ~~**st-alicloud_cms_system_event_contact_group_attachment**~~
 
+  ~~The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
+  This may cause system event rule could create as usual but with an empty target contact group.~~
+
   **Update:**
   - The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) is fixed and currently supports the binding of the created system event rule to the contact group.
   - Users are not encouraged to use this resource as it will no longer be maintained.
