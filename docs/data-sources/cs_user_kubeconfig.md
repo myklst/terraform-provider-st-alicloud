@@ -3,12 +3,12 @@
 page_title: "st-alicloud_cs_user_kubeconfig Data Source - st-alicloud"
 subcategory: ""
 description: |-
-  This data source provides the Container Service Client of the current Alibaba Cloud user.
+  This data source provides the Kubeconfig of container service for the set Alibaba Cloud user.
 ---
 
 # st-alicloud_cs_user_kubeconfig (Data Source)
 
-This data source provides the Container Service Client of the current Alibaba Cloud user.
+This data source provides the Kubeconfig of container service for the set Alibaba Cloud user.
 
 ## Example Usage
 
@@ -47,5 +47,3 @@ Optional:
 - `access_key` (String) The access key for user to query Kubeconfig. Default to use access key configured in the provider.
 - `region` (String) The region of the Container Service for Kubernetes. Default to use region configured in the provider.
 - `secret_key` (String) The secret key for user to query Kubeconfig. Default to use secret key configured in the provider.
-
-

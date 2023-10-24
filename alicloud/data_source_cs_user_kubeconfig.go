@@ -40,7 +40,7 @@ func (d *csUserKubeconfigDataSource) Metadata(_ context.Context, req datasource.
 
 func (d *csUserKubeconfigDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "This data source provides the Container Service Client of the current Alibaba Cloud user.",
+		Description: "This data source provides the Kubeconfig of container service for the set Alibaba Cloud user.",
 		Attributes: map[string]schema.Attribute{
 			"cluster_id": schema.StringAttribute{
 				Description: "Cluster ID of container service for Kubernetes.",
