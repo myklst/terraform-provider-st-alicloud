@@ -15,7 +15,9 @@ require (
 
 require (
 	github.com/alibabacloud-go/adb-20190315/v2 v2.1.2
+	github.com/alibabacloud-go/alb-20200616/v2 v2.0.5
 	github.com/alibabacloud-go/bssopenapi-20171214/v3 v3.0.2
+	github.com/alibabacloud-go/ess-20220222/v2 v2.0.10
 	github.com/alibabacloud-go/slb-20140515/v4 v4.0.1
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/uuid v1.3.0
