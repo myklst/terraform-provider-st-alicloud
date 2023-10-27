@@ -40,7 +40,5 @@ resource "st-alicloud_ess_attach_alb_server_group" "attach_alb" {
 Required:
 
 - `alb_server_group_id` (String) ALB Server Group ID.
-- `port` (Number) Port for instances in ALB Server Group.
-- `weight` (Number) Weight for instances in ALB Server Group.
-
-
+- `port` (Number) Port for instances in ALB Server Group. Accepted values: 1 - 65535.
+- `weight` (Number) Weight for instances in ALB Server Group. Accepted values: 0 - 100.

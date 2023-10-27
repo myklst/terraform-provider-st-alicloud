@@ -8,8 +8,10 @@ import (
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	alicloudAlbClient "github.com/alibabacloud-go/alb-20200616/v2/client"
@@ -65,12 +67,18 @@ func (r *essAttachAlbServerGroupResource) Schema(_ context.Context, _ resource.S
 							Required:    true,
 						},
 						"weight": schema.Int64Attribute{
-							Description: "Weight for instances in ALB Server Group.",
+							Description: "Weight for instances in ALB Server Group. Accepted values: 0 - 100.",
 							Required:    true,
+							Validators: []validator.Int64{
+								int64validator.Between(0, 100),
+							},
 						},
 						"port": schema.Int64Attribute{
-							Description: "Port for instances in ALB Server Group.",
+							Description: "Port for instances in ALB Server Group.  Accepted values: 1 - 65535.",
 							Required:    true,
+							Validators: []validator.Int64{
+								int64validator.Between(1, 65535),
+							},
 						},
 					},
 				},
