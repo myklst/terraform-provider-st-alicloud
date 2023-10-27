@@ -123,6 +123,10 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
   does not provide the option to create auto scaling rules for nodes. (Note: Only task nodes are eligible for auto scaling)
 
+- **st-alicloud_ess_attach_alb_server_group**
+
+  This resource is designed to associate ESS auto scaling groups with ALB server group, and also modify the weight of the scaling groups in the ALB server group.
+
 ### Data Sources
 
 - **st-alicloud_ddoscoo_domain_resources**
