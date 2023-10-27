@@ -3,12 +3,12 @@
 page_title: "st-alicloud_ddoscoo_webconfig_ssl_attachment Resource - st-alicloud"
 subcategory: ""
 description: |-
-  Associates a domain with a SSL cert in Anti-DDoS website configuration.
+  Associate the domain with the TLS version of the SSL certificate and cipher suite in the Anti-DDoS website configuration. [Document](https://www.alibabacloud.com/help/en/ddos-protection/latest/api-ddoscoo-2020-01-01-modifytlsconfig?spm=a2c63.p38356.0.0.419b504fICZVeU)
 ---
 
 # st-alicloud_ddoscoo_webconfig_ssl_attachment (Resource)
 
-Associates a domain with a SSL cert in Anti-DDoS website configuration.
+Associate the domain with the TLS version of the SSL certificate and cipher suite in the Anti-DDoS website configuration. [Document](https://www.alibabacloud.com/help/en/ddos-protection/latest/api-ddoscoo-2020-01-01-modifytlsconfig?spm=a2c63.p38356.0.0.419b504fICZVeU) 
 
 ## Example Usage
 
@@ -16,6 +16,8 @@ Associates a domain with a SSL cert in Anti-DDoS website configuration.
 resource "st-alicloud_ddoscoo_webconfig_ssl_attachment" "bind_ssl" {
   domain  = "test-domain.com"
   cert_id = 12354465
+  tls_version = "tls1.2"
+  cipher_suites = "improved"
 }
 ```
 
@@ -27,4 +29,6 @@ resource "st-alicloud_ddoscoo_webconfig_ssl_attachment" "bind_ssl" {
 - `cert_id` (Number) SSL Certificate ID.
 - `domain` (String) Domain name.
 
-
+### Optional
+- `tls_version` (String) TLS Versions for SSL Certificate. <br/>**Valid values**: `tls1.0`, `tls1.1`, `tls1.2` . default to `tls1.0`.
+- `cipher_suites` (String) Cipher Suites for SSL Certificate. <br/>**Valid values**: `all`, `strong`, `default`, `improved`. <br/> `tls1.0` & `tls1.1` only can accept `all`, `strong`, `default`. <br/> Only `tls1.2` can support up to `all`, `strong`, `default`, `improved`. default to `default`.

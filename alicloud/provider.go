@@ -17,6 +17,7 @@ import (
 	alicloudBaseClient "github.com/alibabacloud-go/bssopenapi-20171214/v3/client"
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
 	alicloudCmsClient "github.com/alibabacloud-go/cms-20190101/v8/client"
+	alicloudCsClient "github.com/alibabacloud-go/cs-20151215/v4/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
@@ -39,6 +40,7 @@ type alicloudClients struct {
 	cmsClient      *alicloudCmsClient.Client
 	adbClient      *alicloudAdbClient.Client
 	emrClient      *alicloudEmrClient.Client
+	csClient       *alicloudCsClient.Client
 	essClient      *alicloudEssClient.Client
 	albClient      *alicloudAlbClient.Client
 }
@@ -328,6 +330,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud CS Client
+	csClientConfig := clientCredentialsConfig
+	csClientConfig.Endpoint = tea.String(fmt.Sprintf("cs.%s.aliyuncs.com", region))
+	csClient, err := alicloudCsClient.NewClient(csClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud CS API Client",
+			"An unexpected error occurred when creating the AliCloud CS API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud CS Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud ESS Client
 	essClientConfig := clientCredentialsConfig
 	essClientConfig.Endpoint = tea.String("ess.aliyuncs.com")
@@ -369,6 +386,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		cmsClient:      cmsClient,
 		adbClient:      adbClient,
 		emrClient:      emrClient,
+		csClient:       csClient,
 		essClient:      essClient,
 		albClient:      albClient,
 	}
@@ -383,6 +401,7 @@ func (p *alicloudProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewDdosCooInstancesDataSource,
 		NewDdosCooDomainResourcesDataSource,
 		NewSlbLoadBalancersDataSource,
+		NewCsUserKubeconfigDataSource,
 	}
 }
 
@@ -399,6 +418,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewDdosCooWebconfigSslAttachmentResource,
 		NewAliadbResourceGroupBindResource,
 		NewEmrMetricAutoScalingRulesResource,
+		NewDdosCooWebAIProtectConfigResource,
 		NewEssAttachAlbServerGroupResource,
 	}
 }

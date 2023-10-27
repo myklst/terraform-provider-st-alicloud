@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"fmt"
 
 	"github.com/cenkalti/backoff/v4"
 
@@ -12,7 +13,10 @@ import (
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 )
@@ -33,6 +37,8 @@ type ddoscooWebconfigSslAttachmentResource struct {
 type ddoscooWebconfigSslAttachmentModel struct {
 	Domain types.String `tfsdk:"domain"`
 	CertId types.Int64  `tfsdk:"cert_id"`
+	TlsVersion types.String   `tfsdk:"tls_version"`
+	CipherSuites types.String `tfsdk:"cipher_suites"`
 }
 
 // Metadata returns the SSL binding resource name.
@@ -43,7 +49,7 @@ func (r *ddoscooWebconfigSslAttachmentResource) Metadata(_ context.Context, req 
 // Schema defines the schema for the SSL certificate binding resource.
 func (r *ddoscooWebconfigSslAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Associates a domain with a SSL cert in Anti-DDoS website configuration.",
+		Description: "Associate the domain with the TLS version of the SSL certificate and cipher suite in the Anti-DDoS website configuration. [Document](https://www.alibabacloud.com/help/en/ddos-protection/latest/api-ddoscoo-2020-01-01-modifytlsconfig?spm=a2c63.p38356.0.0.419b504fICZVeU)",
 		Attributes: map[string]schema.Attribute{
 			"domain": schema.StringAttribute{
 				Description: "Domain name.",
@@ -52,6 +58,24 @@ func (r *ddoscooWebconfigSslAttachmentResource) Schema(_ context.Context, _ reso
 			"cert_id": schema.Int64Attribute{
 				Description: "SSL Certificate ID.",
 				Required:    true,
+			},
+			"tls_version": schema.StringAttribute{
+				Description: "TLS Versions for SSL Certificate.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("tls1.0", "tls1.1", "tls1.2"),
+				},
+				Default: stringdefault.StaticString("tls1.0"),
+			},
+			"cipher_suites": schema.StringAttribute{
+				Description: "Cipher Suites for SSL Certificate.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("all", "improved", "strong", "default"),
+				},
+				Default: stringdefault.StaticString("default"),
 			},
 		},
 	}
@@ -89,6 +113,8 @@ func (r *ddoscooWebconfigSslAttachmentResource) Create(ctx context.Context, req 
 	state := &ddoscooWebconfigSslAttachmentModel{
 		Domain: plan.Domain,
 		CertId: plan.CertId,
+		TlsVersion: plan.TlsVersion,
+		CipherSuites: plan.CipherSuites,
 	}
 
 	// Set state to fully populated data
@@ -142,6 +168,8 @@ func (r *ddoscooWebconfigSslAttachmentResource) Read(ctx context.Context, req re
 			}
 
 			state.Domain = types.StringValue(*webRulesResponse.Body.WebRules[0].Domain)
+			state.TlsVersion = types.StringValue(*webRulesResponse.Body.WebRules[0].SslProtocols)
+			state.CipherSuites = types.StringValue(*webRulesResponse.Body.WebRules[0].SslCiphers)
 
 			// Set refreshed state
 			setStateDiags := resp.State.Set(ctx, &state)
@@ -161,7 +189,7 @@ func (r *ddoscooWebconfigSslAttachmentResource) Read(ctx context.Context, req re
 
 	// Retry backoff
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 60 * time.Second
 
 	err := backoff.Retry(readWebRules, reconnectBackoff)
 	if err != nil {
@@ -199,6 +227,8 @@ func (r *ddoscooWebconfigSslAttachmentResource) Update(ctx context.Context, req 
 	state := &ddoscooWebconfigSslAttachmentModel{
 		Domain: plan.Domain,
 		CertId: plan.CertId,
+		TlsVersion: plan.TlsVersion,
+		CipherSuites: plan.CipherSuites,
 	}
 
 	// Set state to fully populated data
@@ -225,6 +255,10 @@ func (r *ddoscooWebconfigSslAttachmentResource) bindCert(plan *ddoscooWebconfigS
 	bindSSLCert := func() error {
 		runtime := &util.RuntimeOptions{}
 
+		// Wait for the SSL crt to be fully created and ready before binding to AliCloud AntiDDoS Webconfig.
+		time.Sleep(10 * time.Second)
+
+		// bind ssl crt to anitddos webconfig
 		associateWebCertRequest := &alicloudAntiddosClient.AssociateWebCertRequest{
 			Domain: tea.String(plan.Domain.ValueString()),
 			CertId: tea.Int32(int32(plan.CertId.ValueInt64())),
@@ -245,10 +279,39 @@ func (r *ddoscooWebconfigSslAttachmentResource) bindCert(plan *ddoscooWebconfigS
 		return nil
 	}
 
+	modifySSLCert := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		// modify antiddos webconfig ssl cert TLS version & cipher suites
+		modifyTlsConfigRequest := &alicloudAntiddosClient.ModifyTlsConfigRequest{
+			Domain: tea.String(plan.Domain.ValueString()),
+			Config: tea.String(fmt.Sprintf("{\"ssl_protocols\":\"%s\",\"ssl_ciphers\":\"%s\"}", plan.TlsVersion.ValueString(), plan.CipherSuites.ValueString())),
+		}
+
+		_, _err := r.client.ModifyTlsConfigWithOptions(modifyTlsConfigRequest, runtime)
+		if _err != nil {
+			if _t, ok := _err.(*tea.SDKError); ok {
+				if isAbleToRetry(*_t.Code) {
+					return _err
+				} else {
+					return backoff.Permanent(_err)
+				}
+			} else {
+				return _err
+			}
+		}
+		return nil
+	}
+
 	// Retry backoff
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 60 * time.Second
 	err := backoff.Retry(bindSSLCert, reconnectBackoff)
+	if err != nil {
+		return err
+	}
+
+	err = backoff.Retry(modifySSLCert, reconnectBackoff)
 	if err != nil {
 		return err
 	}

@@ -98,15 +98,21 @@ scenario. The reason behind every resources and data sources are stated as below
   is more than 100 domains. The official resources will first destroy all the domains and re-add the new one together with
   the existing one. The resources will hit timeout during adding of new domains and make some of the domains not re-add back.
 
-- **st-alicloud_cms_system_event_contact_group_attachment**
+- ~~**st-alicloud_cms_system_event_contact_group_attachment**~~
 
-  The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) does not bind the created system event rule to the contact group itself.
-  This may cause system event rule could create as usual but with an empty target contact group.
+  **Update:**
+  - The official AliCloud Terraform provider's resource [*alicloud_cms_event_rule*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_event_rule) is fixed and currently supports the binding of the created system event rule to the contact group.
+  - Users are not encouraged to use this resource as it will no longer be maintained.
 
 - **st-alicloud_ddoscoo_webconfig_ssl_attachment**
 
   This resource is designed to associate a SSL certificate to a website/domain before being added
-  into Anti-DDoS as AliCloud Terraform Provider does not support the SSL binding operation.
+  into Anti-DDoS and Modify TLS Security Settings as AliCloud Terraform Provider does not support the SSL binding & modify TLS Security Settings operation.
+
+- **st-alicloud_ddoscoo_webconfig_ai_protect_config**
+
+  This resource is designed to modify antiddos Web AI Protect Mode Config from Protection to Warning for a website/domain before being added into Anti-DDoS webconfig as AliCloud Terraform Provider does not support
+  the modify AI Protect Mode operation.
 
 - **st-alicloud_aliadb_resource_group_bind_user**
 
@@ -155,6 +161,13 @@ scenario. The reason behind every resources and data sources are stated as below
     |-----------------|-------------------------------------------------|-------------------------------------------------------------|
     | load-balancer-A | { "location": "office" "env" : "test" }         | Matched (work as expected)                                  |
     | load-balancer-B | { "location": "office" "env" : "prod" }         | Matched (should not be matched as the `env` is prod)        |
+
+  - Added client_config block to allow overriding the Provider configuration.
+
+- **st-alicloud_cs_user_kubeconfig**
+
+  - The original data source [*alicloud_cs_cluster_credential*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/data-sources/cs_cluster_credential) has limitations on the following configuration scenarios:
+    - Unable to query Kubeconfig of another RAM user using the same Terraform provider as it has different credentials.
 
   - Added client_config block to allow overriding the Provider configuration.
 

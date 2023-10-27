@@ -74,7 +74,7 @@ func (d *cdnDomainDataSource) Schema(_ context.Context, req datasource.SchemaReq
 						Optional: true,
 					},
 					"secret_key": schema.StringAttribute{
-						Description: "The secret key that have permissions to lsit " +
+						Description: "The secret key that have permissions to list " +
 							"CDN domains. Default to use secret key configured in " +
 							"the provider.",
 						Optional: true,
