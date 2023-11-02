@@ -29,7 +29,7 @@ type essClbDefaultServerGroupAttachmentResource struct {
 	client *alicloudEssClient.Client
 }
 
-type essAttachLoadBalancersModel struct {
+type essClbDefaultServerGroupAttachmentModel struct {
 	ScalingGroupId  types.String `tfsdk:"scaling_group_id"`
 	LoadBalancerIds types.List   `tfsdk:"load_balancer_ids"`
 }
@@ -68,7 +68,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Configure(_ context.Context
 // Attach scaling group with load balancers' default server group.
 func (r *essClbDefaultServerGroupAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan *essAttachLoadBalancersModel
+	var plan *essClbDefaultServerGroupAttachmentModel
 	getStateDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -85,7 +85,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Create(ctx context.Context,
 	}
 
 	// Set state items
-	state := &essAttachLoadBalancersModel{
+	state := &essClbDefaultServerGroupAttachmentModel{
 		ScalingGroupId:  plan.ScalingGroupId,
 		LoadBalancerIds: plan.LoadBalancerIds,
 	}
@@ -101,7 +101,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Create(ctx context.Context,
 // Read the attached load balancers in the scaling group.
 func (r *essClbDefaultServerGroupAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Get current state
-	var state *essAttachLoadBalancersModel
+	var state *essClbDefaultServerGroupAttachmentModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -119,7 +119,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Read(ctx context.Context, r
 		}
 	}
 
-	state = &essAttachLoadBalancersModel{
+	state = &essClbDefaultServerGroupAttachmentModel{
 		ScalingGroupId:  types.StringValue(scalingGroupId),
 		LoadBalancerIds: types.ListValueMust(types.StringType, loadBalancerIds),
 	}
@@ -135,7 +135,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Read(ctx context.Context, r
 // Update the attachment of scaling group with load balancers' default server group.
 func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Retrieve values from plan
-	var plan *essAttachLoadBalancersModel
+	var plan *essClbDefaultServerGroupAttachmentModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
@@ -143,7 +143,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context,
 	}
 
 	// Get current state
-	var state *essAttachLoadBalancersModel
+	var state *essClbDefaultServerGroupAttachmentModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
@@ -232,7 +232,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context,
 	}
 
 	// Set state items
-	state = &essAttachLoadBalancersModel{
+	state = &essClbDefaultServerGroupAttachmentModel{
 		ScalingGroupId:  plan.ScalingGroupId,
 		LoadBalancerIds: plan.LoadBalancerIds,
 	}
@@ -248,7 +248,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context,
 // Detach scaling group with load balancers' default server group.
 func (r *essClbDefaultServerGroupAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
-	var state *essAttachLoadBalancersModel
+	var state *essClbDefaultServerGroupAttachmentModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -266,7 +266,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Delete(ctx context.Context,
 }
 
 // Function to read the attached load balancers in a scaling group.
-func (r *essClbDefaultServerGroupAttachmentResource) getLoadBalancersFromScalingGroup(model *essAttachLoadBalancersModel) ([]attr.Value, string, error) {
+func (r *essClbDefaultServerGroupAttachmentResource) getLoadBalancersFromScalingGroup(model *essClbDefaultServerGroupAttachmentModel) ([]attr.Value, string, error) {
 	var describeScalingGroupsResponse *alicloudEssClient.DescribeScalingGroupsResponse
 	var err error
 	var loadBalancers []attr.Value
@@ -315,7 +315,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) getLoadBalancersFromScaling
 }
 
 // Function to attach scaling group with load balancers' default server group.
-func (r *essClbDefaultServerGroupAttachmentResource) attachLoadBalancers(model *essAttachLoadBalancersModel) error {
+func (r *essClbDefaultServerGroupAttachmentResource) attachLoadBalancers(model *essClbDefaultServerGroupAttachmentModel) error {
 	attachLoadBalancers := func() error {
 		runtime := &util.RuntimeOptions{}
 		var loadBalancersIds []*string
@@ -357,7 +357,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) attachLoadBalancers(model *
 }
 
 // Function to detach scaling group with load balancers' default server group.
-func (r *essClbDefaultServerGroupAttachmentResource) detachLoadBalancers(model *essAttachLoadBalancersModel) error {
+func (r *essClbDefaultServerGroupAttachmentResource) detachLoadBalancers(model *essClbDefaultServerGroupAttachmentModel) error {
 	detachLoadBalancers := func() error {
 		runtime := &util.RuntimeOptions{}
 		var loadBalancersIds []*string
