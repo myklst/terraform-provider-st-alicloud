@@ -401,6 +401,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAliadbResourceGroupBindResource,
 		NewEmrMetricAutoScalingRulesResource,
 		NewDdosCooWebAIProtectConfigResource,
-		NewEssAttachLoadBalancersResource,
+		NewEssClbDefaultServerGroupAttachmentResource,
 	}
 }

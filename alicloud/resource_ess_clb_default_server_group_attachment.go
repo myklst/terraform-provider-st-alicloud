@@ -17,15 +17,15 @@ import (
 )
 
 var (
-	_ resource.Resource              = &essAttachLoadBalancersResource{}
-	_ resource.ResourceWithConfigure = &essAttachLoadBalancersResource{}
+	_ resource.Resource              = &essClbDefaultServerGroupAttachmentResource{}
+	_ resource.ResourceWithConfigure = &essClbDefaultServerGroupAttachmentResource{}
 )
 
-func NewEssAttachLoadBalancersResource() resource.Resource {
-	return &essAttachLoadBalancersResource{}
+func NewEssClbDefaultServerGroupAttachmentResource() resource.Resource {
+	return &essClbDefaultServerGroupAttachmentResource{}
 }
 
-type essAttachLoadBalancersResource struct {
+type essClbDefaultServerGroupAttachmentResource struct {
 	client *alicloudEssClient.Client
 }
 
@@ -34,15 +34,15 @@ type essAttachLoadBalancersModel struct {
 	LoadBalancerIds types.List   `tfsdk:"load_balancer_ids"`
 }
 
-// Metadata returns the ESS Attach Load Balancers resource name.
-func (r *essAttachLoadBalancersResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_ess_attach_load_balancers"
+// Metadata returns the ESS CLB Default Server Group Attachment resource name.
+func (r *essClbDefaultServerGroupAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_ess_clb_default_server_group_attachment"
 }
 
-// Schema defines the schema for the ESS Attach Load Balancers resource.
-func (r *essAttachLoadBalancersResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+// Schema defines the schema for the ESS CLB Default Server Group Attachment resource.
+func (r *essClbDefaultServerGroupAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Associates an auto scaling group (ESS) with load balancers (CLB).",
+		Description: "Attach an auto scaling group (ESS) with a list of load balancers (CLB) default server group.",
 		Attributes: map[string]schema.Attribute{
 			"scaling_group_id": schema.StringAttribute{
 				Description: "Scaling Group ID.",
@@ -58,15 +58,15 @@ func (r *essAttachLoadBalancersResource) Schema(_ context.Context, _ resource.Sc
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *essAttachLoadBalancersResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *essClbDefaultServerGroupAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).essClient
 }
 
-// Attach load balancers with scaling group.
-func (r *essAttachLoadBalancersResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+// Attach scaling group with load balancers' default server group.
+func (r *essClbDefaultServerGroupAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
 	var plan *essAttachLoadBalancersModel
 	getStateDiags := req.Plan.Get(ctx, &plan)
@@ -78,7 +78,7 @@ func (r *essAttachLoadBalancersResource) Create(ctx context.Context, req resourc
 	err := r.attachLoadBalancers(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to attach load balancers with scaling group.",
+			"[API ERROR] Failed to attach scaling group with load balancers' default server group.",
 			err.Error(),
 		)
 		return
@@ -98,8 +98,8 @@ func (r *essAttachLoadBalancersResource) Create(ctx context.Context, req resourc
 	}
 }
 
-// Read the load balancers in the scaling group.
-func (r *essAttachLoadBalancersResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+// Read the attached load balancers in the scaling group.
+func (r *essClbDefaultServerGroupAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Get current state
 	var state *essAttachLoadBalancersModel
 	getStateDiags := req.State.Get(ctx, &state)
@@ -112,7 +112,7 @@ func (r *essAttachLoadBalancersResource) Read(ctx context.Context, req resource.
 	if err != nil {
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to get load balancers from scaling group.",
+				"[API ERROR] Failed to get attached load balancers from scaling group.",
 				err.Error(),
 			)
 			return
@@ -132,8 +132,8 @@ func (r *essAttachLoadBalancersResource) Read(ctx context.Context, req resource.
 	}
 }
 
-// Update the backend servers in ALB server group.
-func (r *essAttachLoadBalancersResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+// Update the attachment of scaling group with load balancers' default server group.
+func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Retrieve values from plan
 	var plan *essAttachLoadBalancersModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
@@ -203,28 +203,28 @@ func (r *essAttachLoadBalancersResource) Update(ctx context.Context, req resourc
 			err = r.attachLoadBalancers(plan)
 			if err != nil {
 				resp.Diagnostics.AddError(
-					"[API ERROR] Failed to attach load balancers with scaling group.",
+					"[API ERROR] Failed to attach scaling group with load balancers' default server group.",
 					err.Error(),
 				)
 				return
 			}
 		}
 	} else {
-		// attach load balancers to a new scaling group
+		// attach a new scaling group with load balancers' default server group
 		err = r.attachLoadBalancers(plan)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to attach load balancers with scaling group.",
+				"[API ERROR] Failed to attach scaling group with load balancers' default server group.",
 				err.Error(),
 			)
 			return
 		}
 
-		// detach load balancers from the old scaling group
+		// detach an old scaling group with load balancers' default server group
 		err = r.detachLoadBalancers(state)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to detach load balancers with scaling group.",
+				"[API ERROR] Failed to detach scaling group with load balancers' default server group.",
 				err.Error(),
 			)
 			return
@@ -245,8 +245,8 @@ func (r *essAttachLoadBalancersResource) Update(ctx context.Context, req resourc
 	}
 }
 
-// Detach load balancers with scaling group.
-func (r *essAttachLoadBalancersResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+// Detach scaling group with load balancers' default server group.
+func (r *essClbDefaultServerGroupAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
 	var state *essAttachLoadBalancersModel
 	diags := req.State.Get(ctx, &state)
@@ -258,7 +258,7 @@ func (r *essAttachLoadBalancersResource) Delete(ctx context.Context, req resourc
 	err := r.detachLoadBalancers(state)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to detach load balancers with scaling group.",
+			"[API ERROR] Failed to detach scaling group with load balancers' default server group.",
 			err.Error(),
 		)
 		return
@@ -266,7 +266,7 @@ func (r *essAttachLoadBalancersResource) Delete(ctx context.Context, req resourc
 }
 
 // Function to read the attached load balancers in a scaling group.
-func (r *essAttachLoadBalancersResource) getLoadBalancersFromScalingGroup(model *essAttachLoadBalancersModel) ([]attr.Value, string, error) {
+func (r *essClbDefaultServerGroupAttachmentResource) getLoadBalancersFromScalingGroup(model *essAttachLoadBalancersModel) ([]attr.Value, string, error) {
 	var describeScalingGroupsResponse *alicloudEssClient.DescribeScalingGroupsResponse
 	var err error
 	var loadBalancers []attr.Value
@@ -314,8 +314,8 @@ func (r *essAttachLoadBalancersResource) getLoadBalancersFromScalingGroup(model 
 	return loadBalancers, scalingGroupId, nil
 }
 
-// Function to attach load balancers with scaling group.
-func (r *essAttachLoadBalancersResource) attachLoadBalancers(model *essAttachLoadBalancersModel) error {
+// Function to attach scaling group with load balancers' default server group.
+func (r *essClbDefaultServerGroupAttachmentResource) attachLoadBalancers(model *essAttachLoadBalancersModel) error {
 	attachLoadBalancers := func() error {
 		runtime := &util.RuntimeOptions{}
 		var loadBalancersIds []*string
@@ -356,8 +356,8 @@ func (r *essAttachLoadBalancersResource) attachLoadBalancers(model *essAttachLoa
 	return nil
 }
 
-// Function to detach load balancers with scaling group.
-func (r *essAttachLoadBalancersResource) detachLoadBalancers(model *essAttachLoadBalancersModel) error {
+// Function to detach scaling group with load balancers' default server group.
+func (r *essClbDefaultServerGroupAttachmentResource) detachLoadBalancers(model *essAttachLoadBalancersModel) error {
 	detachLoadBalancers := func() error {
 		runtime := &util.RuntimeOptions{}
 		var loadBalancersIds []*string

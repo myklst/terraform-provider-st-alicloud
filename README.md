@@ -123,9 +123,9 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
   does not provide the option to create auto scaling rules for nodes. (Note: Only task nodes are eligible for auto scaling)
 
-- **st-alicloud_ess_attach_load_balancers**
+- **st-alicloud_ess_clb_default_server_group_attachment**
 
-  This resource is designed to attach an auto scaling group (ESS) with a list of load balancers (CLB).
+  This resource is designed to attach an auto scaling group (ESS) with a list of load balancers (CLB) default server group.
 
 ### Data Sources
 
