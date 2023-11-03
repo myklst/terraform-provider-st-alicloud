@@ -132,7 +132,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) Read(ctx context.Context, r
 	}
 }
 
-// Update the attachment of scaling group with load balancers' default server group.
+// Attach or Detach scaling group with load balancers' default server group.
 func (r *essClbDefaultServerGroupAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Retrieve values from plan
 	var plan *essClbDefaultServerGroupAttachmentModel
