@@ -23,6 +23,7 @@ import (
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
+	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
 
 	"github.com/alibabacloud-go/tea/tea"
 )
@@ -39,6 +40,7 @@ type alicloudClients struct {
 	adbClient      *alicloudAdbClient.Client
 	emrClient      *alicloudEmrClient.Client
 	csClient       *alicloudCsClient.Client
+	essClient      *alicloudEssClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -341,6 +343,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud ESS Client
+	essClientConfig := clientCredentialsConfig
+	essClientConfig.Endpoint = tea.String("ess.aliyuncs.com")
+	essClient, err := alicloudEssClient.NewClient(essClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud ESS API Client",
+			"An unexpected error occurred when creating the AliCloud ESS API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud ESS Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:     baseClient,
@@ -353,6 +370,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		adbClient:      adbClient,
 		emrClient:      emrClient,
 		csClient:       csClient,
+		essClient:      essClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -383,5 +401,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAliadbResourceGroupBindResource,
 		NewEmrMetricAutoScalingRulesResource,
 		NewDdosCooWebAIProtectConfigResource,
+		NewEssClbDefaultServerGroupAttachmentResource,
 	}
 }
