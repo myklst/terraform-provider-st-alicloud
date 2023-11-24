@@ -2,24 +2,27 @@ package alicloud
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff"
 
+	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
 )
 
 var (
-	_ resource.Resource              = &aliadbResourceGroupBindResource{}
-	_ resource.ResourceWithConfigure = &aliadbResourceGroupBindResource{}
+	_ resource.Resource                = &aliadbResourceGroupBindResource{}
+	_ resource.ResourceWithConfigure   = &aliadbResourceGroupBindResource{}
+	_ resource.ResourceWithImportState = &aliadbResourceGroupBindResource{}
 )
 
 func NewAliadbResourceGroupBindResource() resource.Resource {
@@ -115,10 +118,65 @@ func (r *aliadbResourceGroupBindResource) Create(ctx context.Context, req resour
 
 // Read resource group user bind resource information
 func (r *aliadbResourceGroupBindResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// Alicloud doesn't provide a SDK for describing resource group user binding, the read function will not be implemented.
+	var state *aliadbResourceGroupBindResourceModel
+
+	// Retrieve values from state
+	getStateDiags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(getStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	describeDBResourceGroupRequest := &alicloudAdbClient.DescribeDBResourceGroupRequest{
+		DBClusterId: tea.String(state.DBClusterId.ValueString()),
+		GroupName:   tea.String(state.GroupName.ValueString()),
+	}
+	runtime := &util.RuntimeOptions{}
+	_, err := r.client.DescribeDBResourceGroupWithOptions(describeDBResourceGroupRequest, runtime)
+	if err != nil {
+		return
+	}
+
+	// Set state to plan data
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
-// Update updates the DNS weight resource and sets the updated Terraform state on success.
+func (r *aliadbResourceGroupBindResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	importID := req.ID
+
+	groupName, userName, dbClusterId, err := parseImportID(importID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error importing item",
+			"Could not import item, unexpected error (ID should be an integer): "+err.Error(),
+		)
+		return
+	}
+
+	// Set the group_name, group_user and dbcluster_id as attributes in the response's state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_name"), groupName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_user"), userName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dbcluster_id"), dbClusterId)...)
+
+}
+
+func parseImportID(importID string) (string, string, string, error) {
+	id := strings.Split(importID, ":")
+	if len(id) != 3 {
+		return "", "", "", errors.New("Invalid import ID format. The correct format looks like this GroupName:GroupUser:DBClusterID")
+	}
+
+	groupName := id[0]
+	userName := id[1]
+	dbClusterId := id[2]
+	return groupName, userName, dbClusterId, nil
+}
+
+// Update updates the resource group user binding and sets the updated Terraform state on success.
 func (r *aliadbResourceGroupBindResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan *aliadbResourceGroupBindResourceModel
 
