@@ -57,7 +57,7 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Description: "Provides a RAM Policy resource that manages policy content " +
 			"exceeding character limits by splitting it into smaller segments. " +
 			"These segments are combined to form a complete policy attached to " +
-			"the user. However, the policy` that exceed the maximum length of a " +
+			"the user. However, the policy that exceed the maximum length of a " +
 			"policy, they will be attached directly to the user.",
 		Attributes: map[string]schema.Attribute{
 			"attached_policies": schema.ListAttribute{
