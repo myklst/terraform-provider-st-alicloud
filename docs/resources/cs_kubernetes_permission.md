@@ -38,12 +38,12 @@ resource "st-alicloud_cs_kubernetes_permissions" "rbac" {
 <a id="nestedatt--permissions"></a>
 ### Nested Schema for `permissions`
 
+Required:
 - `cluster` (String) The ID of the cluster that you want to manage.
 - `role_name` (String) Specifies the predefined role that you want to assign. Valid values: [ "admin", "ops", "dev", "restricted" ] , and the custom cluster roles.
 - `role_type` (String) The authorization type. Accepted values: ["cluster", "namespace", "all-clusters"].
 
-### Optional
-
+Optional:
 - `is_custom` (Bool) Specifies whether to perform a custom authorization. To perform a custom authorization, set role_name to a custom cluster role.
 - `is_ram_role` (Bool) Specifies whether the permissions are granted to a RAM role. When uid is ram role id, the value of is_ram_role must be true.
 - `namespace` (String) The namespace to which the permissions are scoped. This parameter is required only if you set role_type to namespace.
