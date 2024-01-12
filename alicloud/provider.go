@@ -24,23 +24,25 @@ import (
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
+	alicloudServicemeshClient  "github.com/alibabacloud-go/servicemesh-20200111/v4/client"
 
 	"github.com/alibabacloud-go/tea/tea"
 )
 
 // Wrapper of AliCloud client
 type alicloudClients struct {
-	baseClient     *alicloudBaseClient.Client
-	cdnClient      *alicloudCdnClient.Client
-	antiddosClient *alicloudAntiddosClient.Client
-	slbClient      *alicloudSlbClient.Client
-	dnsClient      *alicloudDnsClient.Client
-	ramClient      *alicloudRamClient.Client
-	cmsClient      *alicloudCmsClient.Client
-	adbClient      *alicloudAdbClient.Client
-	emrClient      *alicloudEmrClient.Client
-	csClient       *alicloudCsClient.Client
-	essClient      *alicloudEssClient.Client
+	baseClient        *alicloudBaseClient.Client
+	cdnClient         *alicloudCdnClient.Client
+	antiddosClient    *alicloudAntiddosClient.Client
+	slbClient         *alicloudSlbClient.Client
+	dnsClient         *alicloudDnsClient.Client
+	ramClient         *alicloudRamClient.Client
+	cmsClient         *alicloudCmsClient.Client
+	adbClient         *alicloudAdbClient.Client
+	emrClient         *alicloudEmrClient.Client
+	csClient          *alicloudCsClient.Client
+	essClient         *alicloudEssClient.Client
+	servicemeshClient *alicloudServicemeshClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -358,19 +360,35 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud Servicemesh Client
+	servicemeshClientConfig := clientCredentialsConfig
+	servicemeshClientConfig.Endpoint = tea.String("servicemesh.aliyuncs.com")
+	servicemeshClient, err := alicloudServicemeshClient.NewClient(servicemeshClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud Servicemesh API Client",
+			"An unexpected error occurred when creating the AliCloud Servicemesh API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud Servicemesh Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
-		baseClient:     baseClient,
-		cdnClient:      cdnClient,
-		antiddosClient: antiddosClient,
-		slbClient:      slbClient,
-		dnsClient:      dnsClient,
-		ramClient:      ramClient,
-		cmsClient:      cmsClient,
-		adbClient:      adbClient,
-		emrClient:      emrClient,
-		csClient:       csClient,
-		essClient:      essClient,
+		baseClient:        baseClient,
+		cdnClient:         cdnClient,
+		antiddosClient:    antiddosClient,
+		slbClient:         slbClient,
+		dnsClient:         dnsClient,
+		ramClient:         ramClient,
+		cmsClient:         cmsClient,
+		adbClient:         adbClient,
+		emrClient:         emrClient,
+		csClient:          csClient,
+		essClient:         essClient,
+		servicemeshClient: servicemeshClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -403,5 +421,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewDdosCooWebAIProtectConfigResource,
 		NewEssClbDefaultServerGroupAttachmentResource,
 		NewCsKubernetesPermissionsResource,
+		NewServicemeshUserPermissionResource,
 	}
 }
