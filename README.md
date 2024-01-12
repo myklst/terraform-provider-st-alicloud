@@ -132,6 +132,11 @@ scenario. The reason behind every resources and data sources are stated as below
   This resource is designed to attach a list of clusters' kubernetes role permissions (CS) with a (RAM) user, and to replace the official Alicloud Terraform Provider's resource [*alicloud_cs_kubernetes_permissions*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cs_kubernetes_permissions).
   The official resource will overwrite all the permissions which is attached with the user, which means it will remove the permissions from other clusters.
 
+- **st-alicloud_service_mesh_user_permission**
+
+  This resource is designed to attach a list of ASM clusters' permissions with a (RAM) user, and to replace the official Alicloud Terraform Provider's resource [*alicloud_service_mesh_user_permission*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/service_mesh_user_permission).
+  The official resource will overwrite all the permissions which is attached with the user, which means it will remove the permissions from other ASM clusters.
+
 ### Data Sources
 
 - **st-alicloud_ddoscoo_domain_resources**
