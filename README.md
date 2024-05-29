@@ -127,10 +127,11 @@ scenario. The reason behind every resources and data sources are stated as below
 
   This resource is designed to attach an auto scaling group (ESS) with a list of load balancers (CLB) default server group.
 
-- **st-alicloud_cs_kubernetes_permission**
+- ~~**st-alicloud_cs_kubernetes_permission**~~
 
-  This resource is designed to attach a list of clusters' kubernetes role permissions (CS) with a (RAM) user, and to replace the official Alicloud Terraform Provider's resource [*alicloud_cs_kubernetes_permissions*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cs_kubernetes_permissions).
-  The official resource will overwrite all the permissions which is attached with the user, which means it will remove the permissions from other clusters.
+  **Update:**
+  - The official AliCloud Terraform provider's resource [*alicloud_cs_kubernetes_permissions*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cs_kubernetes_permissions) is fixed and currently do not overwrite/remove the target user permissions from other clusters.
+  - Users are not encouraged to use this resource as it will no longer be maintained.
 
 - **st-alicloud_service_mesh_user_permission**
 
