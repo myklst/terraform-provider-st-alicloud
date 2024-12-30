@@ -502,7 +502,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 	return nil
 }
 
-func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics { //TODO: check if can recreate issue of updating the policy document
+func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics {
 	data := make(map[string]string)
 
 	removePolicy := func() error {
