@@ -502,7 +502,7 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 	return nil
 }
 
-func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics {
+func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics { //TODO: check if can recreate issue of updating the policy document
 	data := make(map[string]string)
 
 	removePolicy := func() error {
@@ -573,20 +573,22 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 			for {
 				var err error
 				getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-				if err != nil {
-					if *getPolicyRequest.PolicyType == "System" {
-						return backoff.Permanent(err)
-					}
-					if _, ok := err.(*tea.SDKError); ok {
-						if *getPolicyRequest.PolicyType == "Custom" {
-							*getPolicyRequest.PolicyType = "System"
-							continue
-						}
-					} else {
-						return err
-					}
-				} else {
+
+				if err == nil {
 					break
+				}
+
+				if *getPolicyRequest.PolicyType == "System" {
+					return backoff.Permanent(err)
+				}
+
+				// If returns PolicyType "Custom", but SDK error occurs,
+				// Assumes PolicyType is "System"
+				if _, ok := err.(*tea.SDKError); ok && *getPolicyRequest.PolicyType == "Custom" {
+					*getPolicyRequest.PolicyType = "System"
+					continue
+				} else {
+					return err
 				}
 			}
 
@@ -620,16 +622,12 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 					}
 
 					statementArr := data["Statement"].([]interface{})
-					statementBytes, err := json.MarshalIndent(statementArr, "", "  ")
+					statementBytes, err := json.Marshal(statementArr)
 					if err != nil {
 						return nil, nil, err
 					}
 
-					removeSpaces := strings.ReplaceAll(string(statementBytes), " ", "")
-					replacer := strings.NewReplacer("\n", "")
-					removeParagraphs := replacer.Replace(removeSpaces)
-
-					finalStatement := strings.Trim(removeParagraphs, "[]")
+					finalStatement := strings.Trim(string(statementBytes), "[]")
 
 					currentLength += len(finalStatement)
 
