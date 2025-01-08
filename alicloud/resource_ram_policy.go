@@ -648,10 +648,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 				}
 
 				if i == len(plan.AttachedPolicies.Elements())-1 && (currentLength+30) <= maxLength {
-					lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
-					if lastCommaIndex >= 0 {
-						currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
-					}
+					currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
 					appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
 				}
 			}
