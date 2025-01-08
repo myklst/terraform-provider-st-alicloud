@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -40,7 +41,13 @@ type ramPolicyResource struct {
 type ramPolicyResourceModel struct {
 	AttachedPolicies types.List   `tfsdk:"attached_policies"`
 	Policies         types.List   `tfsdk:"policies"`
+	OldPoliciesState types.List   `tfsdk:"old_policies_state"`
 	UserName         types.String `tfsdk:"user_name"`
+}
+
+type oldPolicyDetail struct {
+	OldPolicyName     types.String `tfsdk:"old_policy_name"`
+	OldPolicyDocument types.String `tfsdk:"old_policy_document"`
 }
 
 type policyDetail struct {
@@ -53,6 +60,7 @@ func (r *ramPolicyResource) Metadata(_ context.Context, req resource.MetadataReq
 }
 
 func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	log.Println("PSYSCHEMA!!!!!!")
 	resp.Schema = schema.Schema{
 		Description: "Provides a RAM Policy resource that manages policy content " +
 			"exceeding character limits by splitting it into smaller segments. " +
@@ -81,6 +89,23 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					},
 				},
 			},
+			"old_policies_state": schema.ListNestedAttribute{
+				Description: "Old Policy Document of Each Policy. " +
+					"This is used to Compare with Every Attached Policy's current state",
+				Required: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"old_policy_name": schema.StringAttribute{
+							Description: "The policy name.",
+							Computed:    true,
+						},
+						"old_policy_document": schema.StringAttribute{
+							Description: "The policy document of the RAM policy.",
+							Computed:    true,
+						},
+					},
+				},
+			},
 			"user_name": schema.StringAttribute{
 				Description: "The name of the RAM user that attached to the policy.",
 				Required:    true,
@@ -97,6 +122,8 @@ func (r *ramPolicyResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	log.Println("HELLO!!!!!!")
+
 	var plan *ramPolicyResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
@@ -104,7 +131,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	policy, err := r.createPolicy(plan)
+	policy, currentPoliciesList, err := r.createPolicy(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Create the Policy.",
@@ -123,6 +150,15 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 			},
 		},
 		policy,
+	)
+	state.OldPoliciesState = types.ListValueMust(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"old_policy_name":     types.StringType,
+				"old_policy_document": types.StringType,
+			},
+		},
+		currentPoliciesList,
 	)
 	state.UserName = plan.UserName
 
@@ -148,6 +184,8 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 }
 
 func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	log.Println("PSYREAD!!!!!!")
+
 	var state *ramPolicyResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
@@ -226,7 +264,7 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	policy, err := r.createPolicy(plan)
+	policy, currentPoliciesList, err := r.createPolicy(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to Update the Policy.",
@@ -244,6 +282,15 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 			},
 		},
 		policy,
+	)
+	state.OldPoliciesState = types.ListValueMust(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"old_policy_name":     types.StringType,
+				"old_policy_document": types.StringType,
+			},
+		},
+		currentPoliciesList,
 	)
 	state.UserName = plan.UserName
 
@@ -365,10 +412,10 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 	}
 }
 
-func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []attr.Value, err error) {
-	combinedPolicyStatements, notCombinedPolicies, err := r.getPolicyDocument(plan)
+func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []attr.Value, currentPoliciesList []attr.Value, err error) {
+	combinedPolicyStatements, notCombinedPolicies, currentPoliciesStatements, err := r.getPolicyDocument(plan)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	createPolicy := func() error {
@@ -423,9 +470,25 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 		policiesList = append(policiesList, policyObj)
 	}
 
+	// These policies are used for comparing whether there is a differerence
+	// between current policies in state file and in the console
+	for _, policy := range currentPoliciesStatements {
+		policyObj := types.ObjectValueMust(
+			map[string]attr.Type{
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
+			},
+			map[string]attr.Value{
+				"policy_name":     types.StringValue(policy.policyName),
+				"policy_document": types.StringValue(policy.policyDocument),
+			},
+		)
+		currentPoliciesList = append(policiesList, policyObj)
+	}
+
 	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	return policiesList, backoff.Retry(createPolicy, reconnectBackoff)
+	return policiesList, currentPoliciesList, backoff.Retry(createPolicy, reconnectBackoff)
 }
 
 func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
@@ -499,6 +562,82 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 		},
 		policyDetails,
 	)
+
+	return r.readEachPolicy(state)
+}
+
+func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
+	policyDetailsState := []*oldPolicyDetail{}
+	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
+
+	var err error
+	getPolicy := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		data := make(map[string]string)
+
+		for _, policies := range state.AttachedPolicies.Elements() {
+			json.Unmarshal([]byte(policies.String()), &data)
+
+			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
+				PolicyName: tea.String(data["policy_name"]),
+				PolicyType: tea.String("Custom"),
+			}
+
+			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+			if err != nil {
+				handleAPIError(err)
+			}
+
+			// Sometimes combined policies may be removed accidentally by human mistake or API error.
+			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
+				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+					policyDetail := oldPolicyDetail{
+						OldPolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+						OldPolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+					}
+					policyDetailsState = append(policyDetailsState, &policyDetail)
+				}
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(getPolicy, reconnectBackoff)
+	if err != nil {
+		return diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"[API ERROR] Failed to Read Policy.",
+				err.Error(),
+			),
+		}
+	}
+
+	policyDetails := []attr.Value{}
+	for _, policy := range policyDetailsState {
+		policyDetails = append(policyDetails, types.ObjectValueMust(
+			map[string]attr.Type{
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
+			},
+			map[string]attr.Value{
+				"policy_name":     types.StringValue(policy.OldPolicyName.ValueString()),
+				"policy_document": types.StringValue(policy.OldPolicyDocument.ValueString()),
+			},
+		))
+	}
+	state.OldPoliciesState = types.ListValueMust(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"old_policy_name":     types.StringType,
+				"old_policy_document": types.StringType,
+			},
+		},
+		policyDetails,
+	)
+
 	return nil
 }
 
@@ -553,12 +692,11 @@ type simplePolicy struct {
 	policyDocument string
 }
 
-func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (finalPolicyDocument []string, excludedPolicy []simplePolicy, err error) {
+func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (finalPolicyDocument []string, excludedPolicy []simplePolicy, currentPolicyList []simplePolicy, err error) {
 	policyName := ""
 	currentLength := 0
 	currentPolicyDocument := ""
 	appendedPolicyDocument := make([]string, 0)
-
 	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 
 	for i, policy := range plan.AttachedPolicies.Elements() {
@@ -603,6 +741,11 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 			if getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
 				tempPolicyDocument := *getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument
 
+				currentPolicyList = append(currentPolicyList, simplePolicy{
+					policyName:     policyName,
+					policyDocument: tempPolicyDocument,
+				})
+
 				skipCombinePolicy := false
 				// If the policy itself have more than 6144 characters, then skip the combine
 				// policy part since splitting the policy "statement" will be hitting the
@@ -618,13 +761,13 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 				if !skipCombinePolicy {
 					var data map[string]interface{}
 					if err := json.Unmarshal([]byte(tempPolicyDocument), &data); err != nil {
-						return nil, nil, err
+						return nil, nil, nil, err
 					}
 
 					statementArr := data["Statement"].([]interface{})
 					statementBytes, err := json.Marshal(statementArr)
 					if err != nil {
-						return nil, nil, err
+						return nil, nil, nil, err
 					}
 
 					finalStatement := strings.Trim(string(statementBytes), "[]")
@@ -653,7 +796,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 				}
 			}
 		} else {
-			return nil, nil, fmt.Errorf("could not find the policy: %v", policyName)
+			return nil, nil, nil, fmt.Errorf("could not find the policy: %v", policyName)
 		}
 	}
 
@@ -663,7 +806,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 		}
 	}
 
-	return finalPolicyDocument, excludedPolicy, nil
+	return finalPolicyDocument, excludedPolicy, currentPolicyList, nil
 }
 
 func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (err error) {
