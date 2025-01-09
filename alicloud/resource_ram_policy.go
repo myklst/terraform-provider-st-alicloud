@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -63,7 +62,7 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"policy, they will be attached directly to the user.",
 		Attributes: map[string]schema.Attribute{
 			"attached_policies": schema.ListAttribute{
-				Description: "The RAM policies to attach to the user.HAHAHAHAHAHAHA",
+				Description: "The RAM policies to attach to the user.",
 				Required:    true,
 				ElementType: types.StringType,
 			},
@@ -84,7 +83,7 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"old_policies_state": schema.ListNestedAttribute{
-				Description: "A list of policies.",
+				Description: "A list of policies. Used to compare whether policy has been changed outside of Terraform",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -143,8 +142,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		policy,
 	)
 
-	log.Printf("VALUE OF CURRPOL:, %v", currentPoliciesList)
-
 	state.OldPoliciesState = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
@@ -177,7 +174,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 }
 
-func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) { //TODO: put policy document in old_attached_polices, then use it to compare with new. Somehow ensure read does not overwrite old_attached_policies
+func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state *ramPolicyResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
@@ -638,8 +635,6 @@ func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.D
 		},
 		policyDetails,
 	)
-
-	log.Printf("VALUE OF STATEOLDIN_READEACH:, %v", policyDetails)
 
 	return nil
 }
