@@ -227,6 +227,12 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
 		resp.Diagnostics.AddWarning("Combined policies not found.", "The combined policies attached to the user may be deleted due to human mistake or API error.")
 		state.AttachedPolicies = types.ListNull(types.StringType)
+	} else {
+		compareEachPolicyDiags := r.compareEachPolicy(state, oriState)
+		resp.Diagnostics.Append(compareEachPolicyDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -634,6 +640,33 @@ func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.D
 	)
 
 	log.Printf("VALUE OF STATEOLDIN_READEACH:, %v", policyDetails)
+
+	return nil
+}
+
+func (r *ramPolicyResource) compareEachPolicy(newState, oriState *ramPolicyResourceModel) diag.Diagnostics {
+	oldData := make(map[string]string)
+	newData := make(map[string]string)
+
+	for _, currPolicyDetailState := range newState.OldPoliciesState.Elements() {
+		for _, oldPolicyDetailState := range oriState.OldPoliciesState.Elements() {
+
+			json.Unmarshal([]byte(currPolicyDetailState.String()), &newData)
+			json.Unmarshal([]byte(oldPolicyDetailState.String()), &oldData)
+
+			if newData["policy_name"] == oldData["policy_name"] {
+				if newData["policy_document"] != oldData["policy_document"] {
+					newState.AttachedPolicies = types.ListNull(types.StringType)
+					return diag.Diagnostics{
+						diag.NewWarningDiagnostic(
+							"Policy Drift Detected.",
+							"It may be caused by modifying the .json file outside of Terraform.",
+						),
+					}
+				}
+			}
+		}
+	}
 
 	return nil
 }
