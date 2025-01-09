@@ -45,11 +45,6 @@ type ramPolicyResourceModel struct {
 	UserName         types.String `tfsdk:"user_name"`
 }
 
-type oldPolicyDetail struct {
-	OldPolicyName     types.String `tfsdk:"old_policy_name"`
-	OldPolicyDocument types.String `tfsdk:"old_policy_document"`
-}
-
 type policyDetail struct {
 	PolicyName     types.String `tfsdk:"policy_name"`
 	PolicyDocument types.String `tfsdk:"policy_document"`
@@ -60,7 +55,6 @@ func (r *ramPolicyResource) Metadata(_ context.Context, req resource.MetadataReq
 }
 
 func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	log.Println("PSYSCHEMA!!!!!!")
 	resp.Schema = schema.Schema{
 		Description: "Provides a RAM Policy resource that manages policy content " +
 			"exceeding character limits by splitting it into smaller segments. " +
@@ -69,7 +63,7 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"policy, they will be attached directly to the user.",
 		Attributes: map[string]schema.Attribute{
 			"attached_policies": schema.ListAttribute{
-				Description: "The RAM policies to attach to the user.",
+				Description: "The RAM policies to attach to the user.HAHAHAHAHAHAHA",
 				Required:    true,
 				ElementType: types.StringType,
 			},
@@ -90,16 +84,15 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"old_policies_state": schema.ListNestedAttribute{
-				Description: "Old Policy Document of Each Policy. " +
-					"This is used to Compare with Every Attached Policy's current state",
-				Required: true,
+				Description: "A list of policies.",
+				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"old_policy_name": schema.StringAttribute{
+						"policy_name": schema.StringAttribute{
 							Description: "The policy name.",
 							Computed:    true,
 						},
-						"old_policy_document": schema.StringAttribute{
+						"policy_document": schema.StringAttribute{
 							Description: "The policy document of the RAM policy.",
 							Computed:    true,
 						},
@@ -122,8 +115,6 @@ func (r *ramPolicyResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	log.Println("HELLO!!!!!!")
-
 	var plan *ramPolicyResourceModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
@@ -151,11 +142,14 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		},
 		policy,
 	)
+
+	log.Printf("VALUE OF CURRPOL:, %v", currentPoliciesList)
+
 	state.OldPoliciesState = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
-				"old_policy_name":     types.StringType,
-				"old_policy_document": types.StringType,
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
 			},
 		},
 		currentPoliciesList,
@@ -183,9 +177,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 }
 
-func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	log.Println("PSYREAD!!!!!!")
-
+func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) { //TODO: put policy document in old_attached_polices, then use it to compare with new. Somehow ensure read does not overwrite old_attached_policies
 	var state *ramPolicyResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
@@ -286,8 +278,8 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	state.OldPoliciesState = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
-				"old_policy_name":     types.StringType,
-				"old_policy_document": types.StringType,
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
 			},
 		},
 		currentPoliciesList,
@@ -472,6 +464,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 
 	// These policies are used for comparing whether there is a differerence
 	// between current policies in state file and in the console
+
 	for _, policy := range currentPoliciesStatements {
 		policyObj := types.ObjectValueMust(
 			map[string]attr.Type{
@@ -483,7 +476,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 				"policy_document": types.StringValue(policy.policyDocument),
 			},
 		)
-		currentPoliciesList = append(policiesList, policyObj)
+		currentPoliciesList = append(currentPoliciesList, policyObj)
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
@@ -567,39 +560,41 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 }
 
 func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
-	policyDetailsState := []*oldPolicyDetail{}
+	policyDetailsState := []*policyDetail{}
 	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
+	policyTypes := []string{"Custom", "System"}
 
 	var err error
 	getPolicy := func() error {
 		runtime := &util.RuntimeOptions{}
+		for _, policyType := range policyTypes {
+			for _, policyName := range state.AttachedPolicies.Elements() {
 
-		data := make(map[string]string)
+				policyNameStr := policyName.String()
+				policyNameStr = strings.Trim(policyNameStr, "\"")
+				getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
+					PolicyName: tea.String(policyNameStr),
+					PolicyType: tea.String(policyType),
+				}
 
-		for _, policies := range state.AttachedPolicies.Elements() {
-			json.Unmarshal([]byte(policies.String()), &data)
+				getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+				if err != nil {
+					handleAPIError(err)
+				}
 
-			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-				PolicyName: tea.String(data["policy_name"]),
-				PolicyType: tea.String("Custom"),
-			}
-
-			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-			if err != nil {
-				handleAPIError(err)
-			}
-
-			// Sometimes combined policies may be removed accidentally by human mistake or API error.
-			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
-				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
-					policyDetail := oldPolicyDetail{
-						OldPolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-						OldPolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+				// Sometimes combined policies may be removed accidentally by human mistake or API error.
+				if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
+					if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+						policyDetail := policyDetail{
+							PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+							PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+						}
+						policyDetailsState = append(policyDetailsState, &policyDetail)
 					}
-					policyDetailsState = append(policyDetailsState, &policyDetail)
 				}
 			}
 		}
+
 		return nil
 	}
 
@@ -623,20 +618,22 @@ func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.D
 				"policy_document": types.StringType,
 			},
 			map[string]attr.Value{
-				"policy_name":     types.StringValue(policy.OldPolicyName.ValueString()),
-				"policy_document": types.StringValue(policy.OldPolicyDocument.ValueString()),
+				"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
+				"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
 			},
 		))
 	}
 	state.OldPoliciesState = types.ListValueMust(
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
-				"old_policy_name":     types.StringType,
-				"old_policy_document": types.StringType,
+				"policy_name":     types.StringType,
+				"policy_document": types.StringType,
 			},
 		},
 		policyDetails,
 	)
+
+	log.Printf("VALUE OF STATEOLDIN_READEACH:, %v", policyDetails)
 
 	return nil
 }

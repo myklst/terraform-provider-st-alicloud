@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -12,11 +13,15 @@ import (
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name st-alicloud
 
 func main() {
+	var debug bool
+	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers like delve")
+	flag.Parse()
 	providerAddress := os.Getenv("PROVIDER_LOCAL_PATH")
 	if providerAddress == "" {
 		providerAddress = "registry.terraform.io/myklst/st-alicloud"
 	}
 	providerserver.Serve(context.Background(), alicloud.New, providerserver.ServeOpts{
 		Address: providerAddress,
+		Debug:   debug,
 	})
 }
