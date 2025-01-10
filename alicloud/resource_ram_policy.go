@@ -766,16 +766,17 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 					return backoff.Permanent(err)
 				}
 
-				// If returns PolicyType "Custom", but SDK error occurs,
-				// Assumes PolicyType is "System"
-				if _, ok := err.(*tea.SDKError); ok && *getPolicyRequest.PolicyType == "Custom" {
-					*getPolicyRequest.PolicyType = "System"
-					continue
-				} else {
+				if _, ok := err.(*tea.SDKError); !ok{
 					return err
 				}
-			}
 
+				// If returns PolicyType "Custom", but SDK error occurs,
+				// Assumes PolicyType is "System"
+				if *getPolicyRequest.PolicyType == "Custom" {
+					*getPolicyRequest.PolicyType = "System"
+					continue
+				}
+			}
 			return nil
 		}
 
@@ -824,11 +825,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 					// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
 					// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
 					if (currentLength + 30) > maxLength {
-						lastCommaIndex := strings.LastIndex(currentPolicyDocument, ",")
-						if lastCommaIndex >= 0 {
-							currentPolicyDocument = currentPolicyDocument[:lastCommaIndex] + currentPolicyDocument[lastCommaIndex+1:]
-						}
-
+						currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
 						appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
 						currentPolicyDocument = finalStatement + ","
 						currentLength = len(finalStatement)
