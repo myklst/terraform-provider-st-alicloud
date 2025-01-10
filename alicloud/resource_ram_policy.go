@@ -229,7 +229,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	if len(state.OldPoliciesState.Elements()) != len(oriState.OldPoliciesState.Elements()) {
 		resp.Diagnostics.AddWarning("One of the policies could not found.", "The policy used for combined polices may be deleted due to human mistake or API error.")
-		state.AttachedPolicies = types.ListNull(types.StringType)
+		state.AttachedPolicies = types.ListNull(types.StringType) //This is to ensure Update() is called
 	} else if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
 		resp.Diagnostics.AddWarning("Combined policies not found.", "The combined policies attached to the user may be deleted due to human mistake or API error.")
 		state.AttachedPolicies = types.ListNull(types.StringType)
