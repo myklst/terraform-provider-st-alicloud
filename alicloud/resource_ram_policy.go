@@ -46,6 +46,7 @@ type ramPolicyResourceModel struct {
 
 type policyDetail struct {
 	PolicyName     types.String `tfsdk:"policy_name"`
+	PolicyType     types.String `tfsdk:"policy_type"`
 	PolicyDocument types.String `tfsdk:"policy_document"`
 }
 
@@ -89,6 +90,10 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					Attributes: map[string]schema.Attribute{
 						"policy_name": schema.StringAttribute{
 							Description: "The policy name.",
+							Computed:    true,
+						},
+						"policy_type": schema.StringAttribute{
+							Description: "The policy type.",
 							Computed:    true,
 						},
 						"policy_document": schema.StringAttribute{
@@ -146,6 +151,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
 				"policy_name":     types.StringType,
+				"policy_type":     types.StringType,
 				"policy_document": types.StringType,
 			},
 		},
@@ -221,7 +227,10 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
+	if len(state.OldPoliciesState.Elements()) != len(oriState.OldPoliciesState.Elements()) {
+		resp.Diagnostics.AddWarning("One of the policies could not found.", "The policy used for combined polices may be deleted due to human mistake or API error.")
+		state.AttachedPolicies = types.ListNull(types.StringType)
+	} else if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
 		resp.Diagnostics.AddWarning("Combined policies not found.", "The combined policies attached to the user may be deleted due to human mistake or API error.")
 		state.AttachedPolicies = types.ListNull(types.StringType)
 	} else {
@@ -282,6 +291,7 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
 				"policy_name":     types.StringType,
+				"policy_type":     types.StringType,
 				"policy_document": types.StringType,
 			},
 		},
@@ -425,7 +435,7 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 			}
 
 			if _, err := r.client.CreatePolicyWithOptions(createPolicyRequest, runtime); err != nil {
-				handleAPIError(err)
+				return handleAPIError(err)
 			}
 		}
 
@@ -472,10 +482,12 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 		policyObj := types.ObjectValueMust(
 			map[string]attr.Type{
 				"policy_name":     types.StringType,
+				"policy_type":     types.StringType,
 				"policy_document": types.StringType,
 			},
 			map[string]attr.Value{
 				"policy_name":     types.StringValue(policy.policyName),
+				"policy_type":     types.StringValue(policy.policyType),
 				"policy_document": types.StringValue(policy.policyDocument),
 			},
 		)
@@ -565,35 +577,40 @@ func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagn
 func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
 	policyDetailsState := []*policyDetail{}
 	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
-	policyTypes := []string{"Custom", "System"}
+	data := make(map[string]string)
+
+	if len(state.OldPoliciesState.Elements()) == 0 {
+		return nil
+	}
 
 	var err error
 	getPolicy := func() error {
 		runtime := &util.RuntimeOptions{}
-		for _, policyType := range policyTypes {
-			for _, policyName := range state.AttachedPolicies.Elements() {
+		for _, oldPolicy := range state.OldPoliciesState.Elements() {
 
-				policyNameStr := policyName.String()
-				policyNameStr = strings.Trim(policyNameStr, "\"")
-				getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-					PolicyName: tea.String(policyNameStr),
-					PolicyType: tea.String(policyType),
-				}
+			json.Unmarshal([]byte(oldPolicy.String()), &data)
+			policyNameStr := strings.Trim(data["policy_name"], "\"")
 
-				getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-				if err != nil {
-					handleAPIError(err)
-				}
+			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
+				PolicyName: tea.String(policyNameStr),
+				PolicyType: tea.String(data["policy_type"]),
+			}
 
-				// Sometimes combined policies may be removed accidentally by human mistake or API error.
-				if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
-					if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
-						policyDetail := policyDetail{
-							PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-							PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
-						}
-						policyDetailsState = append(policyDetailsState, &policyDetail)
+			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+			if err != nil {
+				// To detect if policy has been deleted after being attached.
+				continue
+			}
+
+			// Sometimes combined policies may be removed accidentally by human mistake or API error.
+			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
+				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+					policyDetail := policyDetail{
+						PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+						PolicyType:     types.StringValue(*getPolicyRequest.PolicyType),
+						PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
 					}
+					policyDetailsState = append(policyDetailsState, &policyDetail)
 				}
 			}
 		}
@@ -618,10 +635,12 @@ func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.D
 		policyDetails = append(policyDetails, types.ObjectValueMust(
 			map[string]attr.Type{
 				"policy_name":     types.StringType,
+				"policy_type":     types.StringType,
 				"policy_document": types.StringType,
 			},
 			map[string]attr.Value{
 				"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
+				"policy_type":     types.StringValue(policy.PolicyType.ValueString()),
 				"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
 			},
 		))
@@ -630,6 +649,7 @@ func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.D
 		types.ObjectType{
 			AttrTypes: map[string]attr.Type{
 				"policy_name":     types.StringType,
+				"policy_type":     types.StringType,
 				"policy_document": types.StringType,
 			},
 		},
@@ -686,11 +706,11 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 			}
 
 			if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
-				handleAPIError(err)
+				return handleAPIError(err)
 			}
 
 			if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
-				handleAPIError(err)
+				return handleAPIError(err)
 			}
 		}
 
@@ -714,6 +734,7 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 
 type simplePolicy struct {
 	policyName     string
+	policyType     string
 	policyDocument string
 }
 
@@ -768,6 +789,7 @@ func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (fin
 
 				currentPolicyList = append(currentPolicyList, simplePolicy{
 					policyName:     policyName,
+					policyType:     *getPolicyRequest.PolicyType,
 					policyDocument: tempPolicyDocument,
 				})
 
@@ -849,7 +871,7 @@ func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (e
 
 			runtime := &util.RuntimeOptions{}
 			if _, err := r.client.AttachPolicyToUserWithOptions(attachPolicyToUserRequest, runtime); err != nil {
-				handleAPIError(err)
+				return handleAPIError(err)
 			}
 		}
 		return nil
