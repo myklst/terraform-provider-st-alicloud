@@ -715,6 +715,8 @@ func (r *ramPolicyResource) combinePolicyDocument(plan *ramPolicyResourceModel) 
 	attachedPolicies := plan.AttachedPolicies.Elements()
 	policyDetailsState, _ , err := r.fetchPolicies(attachedPolicies, false)
 
+	const policyKeywordLen = 30
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -758,7 +760,7 @@ func (r *ramPolicyResource) combinePolicyDocument(plan *ramPolicyResourceModel) 
 
 		// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
 		// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
-		if (currentLength + 30) > maxLength {
+		if (currentLength + policyKeywordLen) > maxLength {
 			currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
 			appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
 			currentPolicyDocument = finalStatement + ","
