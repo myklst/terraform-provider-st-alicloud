@@ -3,6 +3,7 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,15 +39,15 @@ type ramPolicyResource struct {
 }
 
 type ramPolicyResourceModel struct {
-	AttachedPolicies types.List   `tfsdk:"attached_policies"`
-	Policies         types.List   `tfsdk:"policies"`
-	OldPoliciesState types.List   `tfsdk:"old_policies_state"`
-	UserName         types.String `tfsdk:"user_name"`
+	AttachedPolicies       types.List      `tfsdk:"attached_policies"`
+	Policies               []*policyDetail `tfsdk:"policies"` // TODO: remove when 'Policies' is no longer used.
+	CombinedPolices        []*policyDetail `tfsdk:"combined_policies"`
+	AttachedPoliciesDetail []*policyDetail `tfsdk:"attached_policies_detail"`
+	UserName               types.String    `tfsdk:"user_name"`
 }
 
 type policyDetail struct {
 	PolicyName     types.String `tfsdk:"policy_name"`
-	PolicyType     types.String `tfsdk:"policy_type"`
 	PolicyDocument types.String `tfsdk:"policy_document"`
 }
 
@@ -67,8 +68,10 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Required:    true,
 				ElementType: types.StringType,
 			},
+			// NOTE: Avoid using 'policies' in new implementations; use 'CombinedPolicies' instead.
+			// TODO: Remove this data transfer and 'policies' when said variable is no longer used.
 			"policies": schema.ListNestedAttribute{
-				Description: "A list of policies.",
+				Description: "[Deprecated] A list of policies.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -83,8 +86,8 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					},
 				},
 			},
-			"old_policies_state": schema.ListNestedAttribute{
-				Description: "A list of policies. Used to compare whether policy has been changed outside of Terraform",
+			"combined_policies": schema.ListNestedAttribute{
+				Description: "A list of combined policies that are attached to users.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -92,8 +95,20 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 							Description: "The policy name.",
 							Computed:    true,
 						},
-						"policy_type": schema.StringAttribute{
-							Description: "The policy type.",
+						"policy_document": schema.StringAttribute{
+							Description: "The policy document of the RAM policy.",
+							Computed:    true,
+						},
+					},
+				},
+			},
+			"attached_policies_detail": schema.ListNestedAttribute{
+				Description: "A list of policies. Used to compare whether policy has been changed outside of Terraform",
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"policy_name": schema.StringAttribute{
+							Description: "The policy name.",
 							Computed:    true,
 						},
 						"policy_document": schema.StringAttribute{
@@ -120,7 +135,7 @@ func (r *ramPolicyResource) Configure(_ context.Context, req resource.ConfigureR
 
 func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan *ramPolicyResourceModel
-	getPlanDiags := req.Plan.Get(ctx, &plan)
+	getPlanDiags := req.Config.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -137,26 +152,8 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 
 	state := &ramPolicyResourceModel{}
 	state.AttachedPolicies = plan.AttachedPolicies
-	state.Policies = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		policy,
-	)
-
-	state.OldPoliciesState = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_type":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		currentPoliciesList,
-	)
+	state.CombinedPolices = policy
+	state.AttachedPoliciesDetail = currentPoliciesList
 	state.UserName = plan.UserName
 
 	if err := r.attachPolicyToUser(state); err != nil {
@@ -167,8 +164,8 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	readPolicyDiags := r.readPolicy(state)
-	resp.Diagnostics.Append(readPolicyDiags...)
+	_, errReadPolicyDiags := r.readCombinedPolicy(state)
+	resp.Diagnostics.Append(errReadPolicyDiags)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -188,35 +185,11 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	readPolicyDiags := r.readPolicy(state)
-	resp.Diagnostics.Append(readPolicyDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	listPoliciesForUser := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		listPoliciesForUserRequest := &alicloudRamClient.ListPoliciesForUserRequest{
-			UserName: tea.String(state.UserName.ValueString()),
-		}
-
-		_, err := r.client.ListPoliciesForUserWithOptions(listPoliciesForUserRequest, runtime)
-		if err != nil {
-			handleAPIError(err)
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(listPoliciesForUser, reconnectBackoff)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Users for Group",
-			err.Error(),
-		)
-		return
+	// NOTE: Avoid using 'policies' in new implementations; use 'CombinedPolicies' instead.
+	// TODO: Remove this data transfer and 'policies' when said variable is no longer used.
+	if len(state.CombinedPolices) == 0 && len(state.Policies) != 0 {
+		state.CombinedPolices = state.Policies
+		state.Policies = nil
 	}
 
 	// This state will be using to compare with the current state.
@@ -227,21 +200,45 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	if len(state.OldPoliciesState.Elements()) != len(oriState.OldPoliciesState.Elements()) {
-		resp.Diagnostics.AddWarning("One of the policies could not found.", "The policy used for combined polices may be deleted due to human mistake or API error.")
-		state.AttachedPolicies = types.ListNull(types.StringType) //This is to ensure Update() is called
-	} else if len(state.Policies.Elements()) != len(oriState.Policies.Elements()) {
-		resp.Diagnostics.AddWarning("Combined policies not found.", "The combined policies attached to the user may be deleted due to human mistake or API error.")
-		state.AttachedPolicies = types.ListNull(types.StringType)
-	} else {
-		compareEachPolicyDiags := r.compareEachPolicy(state, oriState)
-		resp.Diagnostics.Append(compareEachPolicyDiags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
+	// NOTE: Avoid using 'policies' in new implementations; use 'CombinedPolicies' instead.
+	// TODO: Remove this data transfer and 'policies' when said variable is no longer used.
+	if len(oriState.CombinedPolices) == 0 && len(oriState.Policies) != 0 {
+		oriState.CombinedPolices = oriState.Policies
+		state.Policies = nil
+	}
+
+	warnReadPolicyDiags, errReadPolicyDiags := r.readCombinedPolicy(state)
+
+	resp.Diagnostics.Append(warnReadPolicyDiags, errReadPolicyDiags)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	warnReadPolicyDiags, errReadPolicyDiags = r.readAttachedPolicy(state, true)
+
+	resp.Diagnostics.Append(warnReadPolicyDiags, errReadPolicyDiags)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	setStateDiags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if warnReadPolicyDiags == nil {
+		compareEachPolicyDiags := r.compareEachPolicy(state, oriState)
+		resp.Diagnostics.Append(compareEachPolicyDiags...)
+	}
+
+	setStateDiags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -250,7 +247,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state *ramPolicyResourceModel
-	getPlanDiags := req.Plan.Get(ctx, &plan)
+	getPlanDiags := req.Config.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -258,6 +255,19 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// NOTE: Avoid using 'policies' in new implementations; use 'CombinedPolicies' instead.
+	// TODO: Remove this data transfer and 'policies' when said variable is no longer used.
+	if len(state.CombinedPolices) == 0 && len(state.Policies) != 0 {
+		state.CombinedPolices = state.Policies
+		state.Policies = nil
+	}
+
+	warnReadPolicyDiags, errReadPolicyDiags := r.readAttachedPolicy(plan, false) //to prevent removal of combined policies, if user inputs non-existing attached policies
+	resp.Diagnostics.Append(warnReadPolicyDiags, errReadPolicyDiags)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -278,25 +288,8 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	state.AttachedPolicies = plan.AttachedPolicies
-	state.Policies = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		policy,
-	)
-	state.OldPoliciesState = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_type":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		currentPoliciesList,
-	)
+	state.CombinedPolices = policy
+	state.AttachedPoliciesDetail = currentPoliciesList
 	state.UserName = plan.UserName
 
 	if err := r.attachPolicyToUser(state); err != nil {
@@ -307,8 +300,8 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	readPolicyDiags := r.readPolicy(state)
-	resp.Diagnostics.Append(readPolicyDiags...)
+	_, errReadPolicyDiags = r.readCombinedPolicy(state)
+	resp.Diagnostics.Append(errReadPolicyDiags)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -326,6 +319,13 @@ func (r *ramPolicyResource) Delete(ctx context.Context, req resource.DeleteReque
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// NOTE: Avoid using 'policies' in new implementations; use 'CombinedPolicies' instead.
+	// TODO: Remove this data transfer and 'policies' when said variable is no longer used.
+	if len(state.CombinedPolices) == 0 && len(state.Policies) != 0 {
+		state.CombinedPolices = state.Policies
+		state.Policies = nil
 	}
 
 	removePolicyDiags := r.removePolicy(state)
@@ -417,8 +417,8 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 	}
 }
 
-func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []attr.Value, currentPoliciesList []attr.Value, err error) {
-	combinedPolicyStatements, notCombinedPolicies, currentPoliciesStatements, err := r.getPolicyDocument(plan)
+func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policiesList []*policyDetail, currentPoliciesList []*policyDetail, err error) {
+	combinedPolicyStatements, notCombinedPolicies, currentPoliciesStatements, err := r.combinePolicyDocument(plan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -442,19 +442,22 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 		return nil
 	}
 
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(createPolicy, reconnectBackoff)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for i, policies := range combinedPolicyStatements {
 		policyName := plan.UserName.ValueString() + "-" + strconv.Itoa(i+1)
 
-		policyObj := types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policyName),
-				"policy_document": types.StringValue(policies),
-			},
-		)
+		policyObj := &policyDetail{
+			PolicyName:     types.StringValue(policyName),
+			PolicyDocument: types.StringValue(policies),
+		}
+
 		policiesList = append(policiesList, policyObj)
 	}
 
@@ -462,16 +465,11 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 	// policy "statement" will be hitting the limitation of "maximum number of
 	// attached policies" easily.
 	for _, policy := range notCombinedPolicies {
-		policyObj := types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policy.policyName),
-				"policy_document": types.StringValue(policy.policyDocument),
-			},
-		)
+		policyObj := &policyDetail{
+			PolicyName:     types.StringValue(policy.policyName),
+			PolicyDocument: types.StringValue(policy.policyDocument),
+		}
+
 		policiesList = append(policiesList, policyObj)
 	}
 
@@ -479,207 +477,187 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 	// between current policies in state file and in the console
 
 	for _, policy := range currentPoliciesStatements {
-		policyObj := types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_type":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policy.policyName),
-				"policy_type":     types.StringValue(policy.policyType),
-				"policy_document": types.StringValue(policy.policyDocument),
-			},
-		)
+		policyObj := &policyDetail{
+			PolicyName:     types.StringValue(strings.Trim(policy.policyName, "\"")),
+			PolicyDocument: types.StringValue(policy.policyDocument),
+		}
+
 		currentPoliciesList = append(currentPoliciesList, policyObj)
 	}
 
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	return policiesList, currentPoliciesList, backoff.Retry(createPolicy, reconnectBackoff)
+	return policiesList, currentPoliciesList, nil
 }
 
-func (r *ramPolicyResource) readPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
+func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (warnDiagnostics, errDiagnostics diag.Diagnostic) {
 	policyDetailsState := []*policyDetail{}
-	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
 
-	var err error
+	var warning, err error
 	getPolicy := func() error {
 		runtime := &util.RuntimeOptions{}
-
-		data := make(map[string]string)
-
-		for _, policies := range state.Policies.Elements() {
-			json.Unmarshal([]byte(policies.String()), &data)
-
+		for _, combinedPolicy := range state.CombinedPolices {
 			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-				PolicyName: tea.String(data["policy_name"]),
+				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 				PolicyType: tea.String("Custom"),
 			}
 
-			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-			if err != nil {
-				handleAPIError(err)
-			}
-
-			// Sometimes combined policies may be removed accidentally by human mistake or API error.
-			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
-				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
-					policyDetail := policyDetail{
-						PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-						PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
-					}
-					policyDetailsState = append(policyDetailsState, &policyDetail)
+			getPolicyResponse, errGetCombinedPolicy := r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+			if errGetCombinedPolicy != nil {
+				if tea.StringValue(errGetCombinedPolicy.(*tea.SDKError).Code) == "EntityNotExist.Policy" {
+					// To detect if policy has been deleted after being attached.
+					warning = errors.Join(warning, handleAPIError(errGetCombinedPolicy))
+				} else {
+					err = errors.Join(err, handleAPIError(errGetCombinedPolicy))
 				}
-			}
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(getPolicy, reconnectBackoff)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"[API ERROR] Failed to Read Policy.",
-				err.Error(),
-			),
-		}
-	}
-
-	policyDetails := []attr.Value{}
-	for _, policy := range policyDetailsState {
-		policyDetails = append(policyDetails, types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
-				"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
-			},
-		))
-	}
-	state.Policies = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		policyDetails,
-	)
-
-	return r.readEachPolicy(state)
-}
-
-func (r *ramPolicyResource) readEachPolicy(state *ramPolicyResourceModel) diag.Diagnostics {
-	policyDetailsState := []*policyDetail{}
-	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
-	data := make(map[string]string)
-
-	if len(state.OldPoliciesState.Elements()) == 0 {
-		return nil
-	}
-
-	var err error
-	getPolicy := func() error {
-		runtime := &util.RuntimeOptions{}
-		for _, oldPolicy := range state.OldPoliciesState.Elements() {
-
-			json.Unmarshal([]byte(oldPolicy.String()), &data)
-			policyNameStr := strings.Trim(data["policy_name"], "\"")
-
-			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-				PolicyName: tea.String(policyNameStr),
-				PolicyType: tea.String(data["policy_type"]),
-			}
-
-			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-			if err != nil {
-				// To detect if policy has been deleted after being attached.
 				continue
 			}
 
 			// Sometimes combined policies may be removed accidentally by human mistake or API error.
 			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
 				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
+					policyDetail := &policyDetail{
+						PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
+						PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
+					}
+					policyDetailsState = append(policyDetailsState, policyDetail)
+				}
+			}
+		}
+		return nil
+	}
+
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	backoff.Retry(getPolicy, reconnectBackoff)
+	if err != nil {
+		errDiagnostics = diag.NewErrorDiagnostic(
+			"[API ERROR] Failed to Read Combined Policy",
+			err.Error(),
+		)
+		return nil, errDiagnostics
+	}
+
+	if warning != nil {
+		warnDiagnostics = diag.NewWarningDiagnostic(
+			"Combined Policies could not be found.",
+			"The combined policies attached to the user may be deleted due to human mistake or API error. This resource will be re-created.\n\n"+
+				warning.Error(),
+		)
+
+		state.AttachedPolicies = types.ListNull(types.StringType) //This is to ensure Update() is called
+	}
+
+	state.CombinedPolices = policyDetailsState
+
+	return warnDiagnostics, errDiagnostics
+}
+
+func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel, inRead bool) (warnDiagnostics, errDiagnostics diag.Diagnostic) {
+	attachedPolicies := state.AttachedPolicies.Elements()
+	policyDetailsState, warning, err := r.fetchPolicies(attachedPolicies, inRead)
+
+	if err != nil {
+		errDiagnostics = diag.NewErrorDiagnostic(
+			"[API ERROR] Failed to Read Attached Policy",
+			err.Error(),
+		)
+	}
+
+	if warning != nil {
+		warnDiagnostics = diag.NewWarningDiagnostic(
+			"One (or more) of the Attached Policy could not be found.",
+			"The policy used for Combined Policies may be deleted due to human mistake or API error.\n\n"+
+				warning.Error(),
+		)
+	}
+
+	state.AttachedPoliciesDetail = policyDetailsState
+	if warnDiagnostics != nil {
+		state.AttachedPolicies = types.ListNull(types.StringType) // Ensure Update() is called
+	}
+
+	return warnDiagnostics, errDiagnostics
+}
+
+func (r *ramPolicyResource) fetchPolicies(attachedPolicies []attr.Value, inRead bool) (policyDetailsState []*policyDetail, errNotExist, errOther error) {
+	getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
+
+	var errGetEachPolicy error
+
+	getPolicy := func() error {
+		runtime := &util.RuntimeOptions{}
+	OuterLoop:
+		for _, policy := range attachedPolicies {
+			getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
+				PolicyName: tea.String(strings.Trim(policy.String(), "\"")),
+				PolicyType: tea.String("Custom"),
+			}
+
+			for {
+				getPolicyResponse, errGetEachPolicy = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
+				if errGetEachPolicy != nil {
+					switch tea.StringValue(errGetEachPolicy.(*tea.SDKError).Code) {
+					case "EntityNotExist.Policy":
+						if *getPolicyRequest.PolicyType == "Custom" {
+							*getPolicyRequest.PolicyType = "System" // Switch to System and Retry
+							continue
+						} else if inRead {
+							errNotExist = errors.Join(errNotExist, handleAPIError(errGetEachPolicy))
+						} else {
+							errOther = errors.Join(errOther, handleAPIError(errGetEachPolicy))
+						}
+					default:
+						errOther = errors.Join(errOther, handleAPIError(errGetEachPolicy))
+					}
+					continue OuterLoop
+				}
+				break
+			}
+
+			if getPolicyResponse.Body != nil && getPolicyResponse.Body.Policy != nil {
+				if getPolicyResponse.Body.Policy.PolicyName != nil && getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
 					policyDetail := policyDetail{
 						PolicyName:     types.StringValue(*getPolicyResponse.Body.Policy.PolicyName),
-						PolicyType:     types.StringValue(*getPolicyRequest.PolicyType),
 						PolicyDocument: types.StringValue(*getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument),
 					}
 					policyDetailsState = append(policyDetailsState, &policyDetail)
 				}
 			}
 		}
-
 		return nil
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(getPolicy, reconnectBackoff)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"[API ERROR] Failed to Read Policy.",
-				err.Error(),
-			),
-		}
-	}
+	backoff.Retry(getPolicy, reconnectBackoff)
 
-	policyDetails := []attr.Value{}
-	for _, policy := range policyDetailsState {
-		policyDetails = append(policyDetails, types.ObjectValueMust(
-			map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_type":     types.StringType,
-				"policy_document": types.StringType,
-			},
-			map[string]attr.Value{
-				"policy_name":     types.StringValue(policy.PolicyName.ValueString()),
-				"policy_type":     types.StringValue(policy.PolicyType.ValueString()),
-				"policy_document": types.StringValue(policy.PolicyDocument.ValueString()),
-			},
-		))
-	}
-	state.OldPoliciesState = types.ListValueMust(
-		types.ObjectType{
-			AttrTypes: map[string]attr.Type{
-				"policy_name":     types.StringType,
-				"policy_type":     types.StringType,
-				"policy_document": types.StringType,
-			},
-		},
-		policyDetails,
-	)
-
-	return nil
+	return policyDetailsState, errNotExist, errOther
 }
 
 func (r *ramPolicyResource) compareEachPolicy(newState, oriState *ramPolicyResourceModel) diag.Diagnostics {
-	oldData := make(map[string]string)
-	newData := make(map[string]string)
+	var driftedPolicies []string
 
-	for _, currPolicyDetailState := range newState.OldPoliciesState.Elements() {
-		for _, oldPolicyDetailState := range oriState.OldPoliciesState.Elements() {
-
-			json.Unmarshal([]byte(currPolicyDetailState.String()), &newData)
-			json.Unmarshal([]byte(oldPolicyDetailState.String()), &oldData)
-
-			if newData["policy_name"] == oldData["policy_name"] {
-				if newData["policy_document"] != oldData["policy_document"] {
-					newState.AttachedPolicies = types.ListNull(types.StringType)
-					return diag.Diagnostics{
-						diag.NewWarningDiagnostic(
-							"Policy Drift Detected.",
-							"It may be caused by modifying the .json file outside of Terraform.",
-						),
-					}
+	for _, currPolicyDetailState := range newState.AttachedPoliciesDetail {
+		for _, oldPolicyDetailState := range oriState.AttachedPoliciesDetail {
+			if oldPolicyDetailState.PolicyName.String() == currPolicyDetailState.PolicyName.String() {
+				if oldPolicyDetailState.PolicyDocument.String() != currPolicyDetailState.PolicyDocument.String() {
+					driftedPolicies = append(driftedPolicies, oldPolicyDetailState.PolicyName.String())
 				}
 			}
+		}
+	}
+
+	if len(driftedPolicies) > 0 {
+		driftedPoliciesMessage := fmt.Sprintf(
+			"The following policies have drifted: %s. It may be caused by modifying the .json file outside of Terraform.",
+			strings.Join(driftedPolicies, ", "),
+		)
+
+		newState.AttachedPolicies = types.ListNull(types.StringType) // Set the state to trigger an update.
+		return diag.Diagnostics{
+			diag.NewWarningDiagnostic(
+				"Policy Drift Detected.",
+				driftedPoliciesMessage,
+			),
 		}
 	}
 
@@ -687,22 +665,18 @@ func (r *ramPolicyResource) compareEachPolicy(newState, oriState *ramPolicyResou
 }
 
 func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics {
-	data := make(map[string]string)
-
 	removePolicy := func() error {
-		for _, policies := range state.Policies.Elements() {
+		for _, combinedPolicy := range state.CombinedPolices {
 			runtime := &util.RuntimeOptions{}
-
-			json.Unmarshal([]byte(policies.String()), &data)
 
 			detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
 				PolicyType: tea.String("Custom"),
-				PolicyName: tea.String(data["policy_name"]),
+				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 				UserName:   tea.String(state.UserName.ValueString()),
 			}
 
 			deletePolicyRequest := &alicloudRamClient.DeletePolicyRequest{
-				PolicyName: tea.String(data["policy_name"]),
+				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 			}
 
 			if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
@@ -734,135 +708,84 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 
 type simplePolicy struct {
 	policyName     string
-	policyType     string
 	policyDocument string
 }
 
-func (r *ramPolicyResource) getPolicyDocument(plan *ramPolicyResourceModel) (finalPolicyDocument []string, excludedPolicy []simplePolicy, currentPolicyList []simplePolicy, err error) {
-	policyName := ""
+func (r *ramPolicyResource) combinePolicyDocument(plan *ramPolicyResourceModel) (finalPolicyDocument []string, excludedPolicy []simplePolicy, currentPolicyList []simplePolicy, err error) {
+	attachedPolicies := plan.AttachedPolicies.Elements()
+	policyDetailsState, _ , err := r.fetchPolicies(attachedPolicies, false)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	currentLength := 0
 	currentPolicyDocument := ""
 	appendedPolicyDocument := make([]string, 0)
-	var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 
-	for i, policy := range plan.AttachedPolicies.Elements() {
-		policyName = policy.String()
-		getPolicyRequest := &alicloudRamClient.GetPolicyRequest{
-			PolicyType: tea.String("Custom"),
-			PolicyName: tea.String(trimStringQuotes(policyName)),
+	for _, detail := range policyDetailsState {
+		tempPolicyDocument := detail.PolicyDocument.ValueString()
+
+		currentPolicyList = append(currentPolicyList, simplePolicy{
+			policyName:     detail.PolicyName.ValueString(),
+			policyDocument: tempPolicyDocument,
+		})
+
+		// If the policy itself have more than 6144 characters, then skip the combine
+		// policy part since splitting the policy "statement" will be hitting the
+		// limitation of "maximum number of attached policies" easily.
+		if len(tempPolicyDocument) > maxLength {
+			excludedPolicy = append(excludedPolicy, simplePolicy{
+				policyName:     detail.PolicyName.ValueString(),
+				policyDocument: tempPolicyDocument,
+			})
+			continue
 		}
 
-		getPolicy := func() error {
-			runtime := &util.RuntimeOptions{}
-			for {
-				var err error
-				getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
-
-				if err == nil {
-					break
-				}
-
-				if *getPolicyRequest.PolicyType == "System" {
-					return backoff.Permanent(err)
-				}
-
-				if _, ok := err.(*tea.SDKError); !ok{
-					return err
-				}
-
-				// If returns PolicyType "Custom", but SDK error occurs,
-				// Assumes PolicyType is "System"
-				if *getPolicyRequest.PolicyType == "Custom" {
-					*getPolicyRequest.PolicyType = "System"
-					continue
-				}
-			}
-			return nil
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(tempPolicyDocument), &data); err != nil {
+			return nil, nil, nil, err
 		}
 
-		reconnectBackoff := backoff.NewExponentialBackOff()
-		reconnectBackoff.MaxElapsedTime = 30 * time.Second
-		backoff.Retry(getPolicy, reconnectBackoff)
+		statementArr := data["Statement"].([]interface{})
+		statementBytes, err := json.Marshal(statementArr)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 
-		if getPolicyResponse.Body != nil && getPolicyResponse.Body.DefaultPolicyVersion != nil {
-			if getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument != nil {
-				tempPolicyDocument := *getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument
+		finalStatement := strings.Trim(string(statementBytes), "[]")
+		currentLength += len(finalStatement)
 
-				currentPolicyList = append(currentPolicyList, simplePolicy{
-					policyName:     policyName,
-					policyType:     *getPolicyRequest.PolicyType,
-					policyDocument: tempPolicyDocument,
-				})
-
-				skipCombinePolicy := false
-				// If the policy itself have more than 6144 characters, then skip the combine
-				// policy part since splitting the policy "statement" will be hitting the
-				// limitation of "maximum number of attached policies" easily.
-				if len(tempPolicyDocument) > maxLength {
-					excludedPolicy = append(excludedPolicy, simplePolicy{
-						policyName:     policyName,
-						policyDocument: tempPolicyDocument,
-					})
-					skipCombinePolicy = true
-				}
-
-				if !skipCombinePolicy {
-					var data map[string]interface{}
-					if err := json.Unmarshal([]byte(tempPolicyDocument), &data); err != nil {
-						return nil, nil, nil, err
-					}
-
-					statementArr := data["Statement"].([]interface{})
-					statementBytes, err := json.Marshal(statementArr)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-
-					finalStatement := strings.Trim(string(statementBytes), "[]")
-
-					currentLength += len(finalStatement)
-
-					// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
-					// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
-					if (currentLength + 30) > maxLength {
-						currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
-						appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
-						currentPolicyDocument = finalStatement + ","
-						currentLength = len(finalStatement)
-					} else {
-						currentPolicyDocument += finalStatement + ","
-					}
-				}
-
-				if i == len(plan.AttachedPolicies.Elements())-1 && (currentLength+30) <= maxLength {
-					currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
-					appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
-				}
-			}
+		// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
+		// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
+		if (currentLength + 30) > maxLength {
+			currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
+			appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
+			currentPolicyDocument = finalStatement + ","
+			currentLength = len(finalStatement)
 		} else {
-			return nil, nil, nil, fmt.Errorf("could not find the policy: %v", policyName)
+			currentPolicyDocument += finalStatement + ","
 		}
 	}
 
-	if len(appendedPolicyDocument) > 0 {
-		for _, policy := range appendedPolicyDocument {
-			finalPolicyDocument = append(finalPolicyDocument, fmt.Sprintf(`{"Version":"1","Statement":[%v]}`, policy))
-		}
+	if len(currentPolicyDocument) > 0 {
+		currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
+		appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
+	}
+
+	for _, policy := range appendedPolicyDocument {
+		finalPolicyDocument = append(finalPolicyDocument, fmt.Sprintf(`{"Version":"1","Statement":[%v]}`, policy))
 	}
 
 	return finalPolicyDocument, excludedPolicy, currentPolicyList, nil
 }
 
 func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (err error) {
-	data := make(map[string]string)
-
 	attachPolicyToUser := func() error {
-		for _, policies := range state.Policies.Elements() {
-			json.Unmarshal([]byte(policies.String()), &data)
-
+		for _, combinedPolicy := range state.CombinedPolices {
 			attachPolicyToUserRequest := &alicloudRamClient.AttachPolicyToUserRequest{
 				PolicyType: tea.String("Custom"),
-				PolicyName: tea.String(data["policy_name"]),
+				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 				UserName:   tea.String(state.UserName.ValueString()),
 			}
 

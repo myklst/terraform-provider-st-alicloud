@@ -1,16 +1,13 @@
 locals {
-  users = ["lq-user-2"]
+  users = ["lq-user-2", "lq-user-3"] //custom users used for testing. Please either create said users or remove them from this list.
 }
 
 resource "st-alicloud_ram_policy" "ram_policy" {
   for_each = toset(local.users)
 
   attached_policies = [
-    "AliyunRAMReadOnlyAccess", "AliyunOSSReadOnlyAccess", "AliyunECSReadOnlyAccess", "AliyunRDSReadOnlyAccess",
-    "AliyunVPCReadOnlyAccess", "AliyunEIPReadOnlyAccess", "AliyunOCSReadOnlyAccess", "AliyunOTSReadOnlyAccess",
-    "AliyunRDSReadOnlyAccess", "AliyunSLBReadOnlyAccess", "AliyunCDNReadOnlyAccess", "AliyunLogReadOnlyAccess",
-    "AliyunCDNReadOnlyAccess",
-  "LqTestPolicy", "LqTestPolicy2", ] //custom policies used for testing. Please either create said policies or remove them from this list.
+    "AliyunRAMReadOnlyAccess", "AliyunOSSReadOnlyAccess",
+  "LqTestPolicy", "AliyunPubDNSReadOnlyAccess"] //custom policies used for testing. Please either create said policies or remove them from this list.
   user_name = each.value
 }
 
