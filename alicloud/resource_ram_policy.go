@@ -236,6 +236,9 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if warnReadPolicyDiags == nil {
 		compareEachPolicyDiags := r.compareEachPolicy(state, oriState)
 		resp.Diagnostics.Append(compareEachPolicyDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	setStateDiags = resp.State.Set(ctx, &state)
@@ -475,7 +478,6 @@ func (r *ramPolicyResource) createPolicy(plan *ramPolicyResourceModel) (policies
 
 	// These policies are used for comparing whether there is a differerence
 	// between current policies in state file and in the console
-
 	for _, policy := range currentPoliciesStatements {
 		policyObj := &policyDetail{
 			PolicyName:     types.StringValue(strings.Trim(policy.policyName, "\"")),
@@ -636,8 +638,8 @@ func (r *ramPolicyResource) fetchPolicies(attachedPolicies []attr.Value, inRead 
 func (r *ramPolicyResource) compareEachPolicy(newState, oriState *ramPolicyResourceModel) diag.Diagnostics {
 	var driftedPolicies []string
 
-	for _, currPolicyDetailState := range newState.AttachedPoliciesDetail {
-		for _, oldPolicyDetailState := range oriState.AttachedPoliciesDetail {
+	for _, oldPolicyDetailState := range oriState.AttachedPoliciesDetail {
+		for _, currPolicyDetailState := range newState.AttachedPoliciesDetail {
 			if oldPolicyDetailState.PolicyName.String() == currPolicyDetailState.PolicyName.String() {
 				if oldPolicyDetailState.PolicyDocument.String() != currPolicyDetailState.PolicyDocument.String() {
 					driftedPolicies = append(driftedPolicies, oldPolicyDetailState.PolicyName.String())
@@ -760,7 +762,7 @@ func (r *ramPolicyResource) combinePolicyDocument(plan *ramPolicyResourceModel) 
 
 		// Before further proceeding the current policy, we need to add a number of 30 to simulate the total length of completed policy to check whether it is already execeeded the max character length of 6144.
 		// Number of 30 indicates the character length of neccessary policy keyword such as "Version" and "Statement" and some JSON symbols ({}, [])
-		if (currentLength + policyKeywordLen) > maxLength {
+		if (currentLength + 30) > maxLength {
 			currentPolicyDocument = strings.TrimSuffix(currentPolicyDocument, ",")
 			appendedPolicyDocument = append(appendedPolicyDocument, currentPolicyDocument)
 			currentPolicyDocument = finalStatement + ","
