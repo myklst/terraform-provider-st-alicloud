@@ -237,22 +237,21 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 			err.Error(),
 		)
 	}
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
+	if resp.Diagnostics.WarningsCount() > 0 || resp.Diagnostics.HasError() {
 		return
 	}
 
-	// If the attached policy not found, it should return error because
+	// If the attached policy not found, it should return warning instead of error
+	// because there is no ways to get plan configuration in Read() function to
+	// indicate user had removed the non existed policies from the input.
 	readAttachedPolicNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(state)
 	for _, warning := range readAttachedPolicNotExistErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Attached Policies: Policy Not Found!",
-			fmt.Sprintf("The policy that will be used to combine policies had been removed on AliCloud: \n\n%s", warning.Error()),
+		resp.Diagnostics.AddWarning(
+			"[API WARNING] Failed to Read Attached Policies: Policy Not Found!",
+			fmt.Sprintf("The policy that will be used to combine policies had been removed on AliCloud, next apply with update will prompt error: \n\n%s", warning.Error()),
 		)
 	}
 	for _, err := range readAttachedPolicyErr {
@@ -261,7 +260,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 			err.Error(),
 		)
 	}
-	if resp.Diagnostics.HasError() {
+	if resp.Diagnostics.WarningsCount() > 0 || resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -299,6 +298,25 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	if len(state.CombinedPolicesDetail) == 0 && len(state.Policies) != 0 {
 		state.CombinedPolicesDetail = state.Policies
 		state.Policies = nil
+	}
+
+	// Make sure each of the attached policies are exist before removing the combined
+	// policies.
+	readAttachedPolicNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(state)
+	for _, warning := range readAttachedPolicNotExistErr {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Read Attached Policies: Policy Not Found!",
+			fmt.Sprintf("The policy that will be used to combine policies had been removed on AliCloud: \n\n%s", warning.Error()),
+		)
+	}
+	for _, err := range readAttachedPolicyErr {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to Read Attached Policies: Unexpected Error!",
+			err.Error(),
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	removePolicyDiags := r.removePolicy(state)
@@ -535,9 +553,9 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 //   - attachedPoliciesDetail: The attached policies detail to be recorded in state file.
 //   - errList: List of errors, return nil if no errors.
 func (r *ramPolicyResource) combinePolicyDocument(attachedPolicies []string) (combinedPolicyDocument []string, excludedPolicies []*policyDetail, attachedPoliciesDetail []*policyDetail, errList []error) {
-	attachedPoliciesDetail, _, errList = r.fetchPolicies(attachedPolicies, []string{"Custom", "System"}, false)
+	attachedPoliciesDetail, notExistErrList, unexpectedErrList := r.fetchPolicies(attachedPolicies, []string{"Custom", "System"})
 	if len(errList) != 0 {
-		return nil, nil, nil, errList
+		return nil, nil, nil, append(unexpectedErrList, notExistErrList...)
 	}
 
 	currentLength := 0
@@ -615,7 +633,7 @@ func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (n
 		policiesName = append(policiesName, policy.PolicyName.ValueString())
 	}
 
-	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom"}, true)
+	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom"})
 	if len(unexpectedErrs) > 0 {
 		return nil, unexpectedErrs
 	}
@@ -646,7 +664,7 @@ func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel) (n
 		policiesName = append(policiesName, policy.PolicyName.ValueString())
 	}
 
-	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom", "System"}, true)
+	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom", "System"})
 	if len(unexpectedErrs) > 0 {
 		return nil, unexpectedErrs
 	}
@@ -668,13 +686,12 @@ func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel) (n
 // Parameters:
 //   - policiesName: List of RAM policies name.
 //   - policyTypes: List of RAM policy types to retrieve.
-//   - allowNotExistError: Whether to return the error 'EntityNotExist.Policy' as 'allowedError'.
 //
 // Returns:
 //   - policiesDetail: List of retrieved policies detail.
 //   - notExistError: List of allowed not exist errors to be used as warning messages instead, return empty list if no errors.
 //   - unexpectedError: List of unexpected errors to be used as normal error messages, return empty list if no errors.
-func (r *ramPolicyResource) fetchPolicies(policiesName []string, policyTypes []string, allowNotExistError bool) (policiesDetail []*policyDetail, notExistError, unexpectedError []error) {
+func (r *ramPolicyResource) fetchPolicies(policiesName []string, policyTypes []string) (policiesDetail []*policyDetail, notExistError, unexpectedError []error) {
 	for _, attachedPolicy := range policiesName {
 		getPolicyResponse := &alicloudRamClient.GetPolicyResponse{}
 		var err error
@@ -712,11 +729,7 @@ func (r *ramPolicyResource) fetchPolicies(policiesName []string, policyTypes []s
 			// function. The error handling here represent the RAM policy is not
 			// found in all policy types.
 			case "EntityNotExist.Policy":
-				if allowNotExistError {
-					notExistError = append(notExistError, err)
-				} else {
-					unexpectedError = append(unexpectedError, err)
-				}
+				notExistError = append(notExistError, err)
 			default:
 				unexpectedError = append(unexpectedError, err)
 			}
