@@ -144,15 +144,13 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	combinedPolicies, attachedPolicies, errors := r.createPolicy(ctx, plan)
-	if errors != nil {
-		for _, err := range errors {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Create the Policy.",
-				err.Error(),
-			)
-		}
-		return
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		"[API ERROR] Failed to Create the Policy.",
+		errors,
+		"",
+	)
 
 	state := &ramPolicyResourceModel{}
 	state.UserName = plan.UserName
@@ -160,28 +158,32 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	state.AttachedPoliciesDetail = attachedPolicies
 	state.CombinedPolicesDetail = combinedPolicies
 
-	if err := r.attachPolicyToUser(state); err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Attach Policy to User.",
-			err.Error(),
-		)
-		return
-	}
+	err := r.attachPolicyToUser(state)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		"[API ERROR] Failed to Attach Policy to User.",
+		[]error{err},
+		"",
+	)
 
 	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
-	for _, warning := range readCombinedPolicyNotExistErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Combined Policies: Policy Not Found!",
-			warning.Error(),
-		)
-	}
-	for _, err := range readCombinedPolicyErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Combined Policies: Unexpected Error!",
-			err.Error(),
-		)
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Combined Policies for %v: Policy Not Found!", state.UserName),
+		readCombinedPolicyNotExistErr,
+		"",
+	)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Combined Policies for %v: Unexpected Error!", state.UserName),
+		readCombinedPolicyErr,
+		"",
+	)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -225,18 +227,20 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
-	for _, warning := range readCombinedPolicyNotExistErr {
-		resp.Diagnostics.AddWarning(
-			"[API WARNING] Failed to Read Combined Policies: Policy Not Found!",
-			fmt.Sprintf("The combined policies may be deleted due to human mistake or API error, will trigger update to recreate the combined policy: \n\n%s", warning.Error()),
-		)
-	}
-	for _, err := range readCombinedPolicyErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Combined Policies: Unexpected Error!",
-			err.Error(),
-		)
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"warning",
+		fmt.Sprintf("[API WARNING] Failed to Read Combined Policies for %v: Policy Not Found!", state.UserName),
+		readCombinedPolicyNotExistErr,
+		"The combined policies may be deleted due to human mistake or API error, will trigger update to recreate the combined policy:",
+	)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Combined Policies for %v: Unexpected Error!", state.UserName),
+		readCombinedPolicyErr,
+		"",
+	)
 
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
@@ -247,30 +251,41 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// If the attached policy not found, it should return warning instead of error
 	// because there is no ways to get plan configuration in Read() function to
 	// indicate user had removed the non existed policies from the input.
-	readAttachedPolicNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(state)
-	for _, warning := range readAttachedPolicNotExistErr {
-		resp.Diagnostics.AddWarning(
-			"[API WARNING] Failed to Read Attached Policies: Policy Not Found!",
-			fmt.Sprintf("The policy that will be used to combine policies had been removed on AliCloud, next apply with update will prompt error: \n\n%s", warning.Error()),
-		)
+	readAttachedPolicyNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(state)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"warning",
+		fmt.Sprintf("[API WARNING] Failed to Read Attached Policies for %v: Policy Not Found!", state.UserName),
+		readAttachedPolicyNotExistErr,
+		"The policy that will be used to combine policies had been removed on AliCloud, next apply with update will prompt error:",
+	)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Attached Policies for %v: Unexpected Error!", state.UserName),
+		readAttachedPolicyErr,
+		"",
+	)
+
+	// need to set state so that terraform can decide whether to update
+	setStateDiags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	for _, err := range readAttachedPolicyErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Attached Policies: Unexpected Error!",
-			err.Error(),
-		)
-	}
+
 	if resp.Diagnostics.WarningsCount() > 0 || resp.Diagnostics.HasError() {
 		return
 	}
 
 	compareAttachedPoliciesErr := r.checkPoliciesDrift(state, oriState)
-	if compareAttachedPoliciesErr != nil {
-		resp.Diagnostics.AddWarning(
-			"[API WARNING] Policy Drift Detected.",
-			compareAttachedPoliciesErr.Error(),
-		)
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"warning",
+		fmt.Sprintf("[API WARNING] Policy Drift Detected for %v.", state.UserName),
+		[]error{compareAttachedPoliciesErr},
+		"",
+	)
 
 	setStateDiags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
@@ -302,19 +317,22 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// Make sure each of the attached policies are exist before removing the combined
 	// policies.
-	readAttachedPolicNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(state)
-	for _, warning := range readAttachedPolicNotExistErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Attached Policies: Policy Not Found!",
-			fmt.Sprintf("The policy that will be used to combine policies had been removed on AliCloud: \n\n%s", warning.Error()),
-		)
-	}
-	for _, err := range readAttachedPolicyErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Attached Policies: Unexpected Error!",
-			err.Error(),
-		)
-	}
+	readAttachedPolicyNotExistErr, readAttachedPolicyErr := r.readAttachedPolicy(plan)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Attached Policies for %v: Policy Not Found!", state.UserName),
+		readAttachedPolicyNotExistErr,
+		"The policy that will be used to combine policies had been removed on AliCloud:",
+	)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Attached Policies for %v: Unexpected Error!", state.UserName),
+		readAttachedPolicyErr,
+		"",
+	)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -326,43 +344,45 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	combinedPolicies, attachedPolicies, errors := r.createPolicy(ctx, plan)
-	if errors != nil {
-		for _, err := range errors {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to Create the Policy.",
-				err.Error(),
-			)
-		}
-		return
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		"[API ERROR] Failed to Create the Policy.",
+		errors,
+		"",
+	)
 
 	state.UserName = plan.UserName
 	state.AttachedPolicies = plan.AttachedPolicies
 	state.AttachedPoliciesDetail = attachedPolicies
 	state.CombinedPolicesDetail = combinedPolicies
 
-	if err := r.attachPolicyToUser(state); err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Attach Policy to User.",
-			err.Error(),
-		)
-		return
-	}
+	err := r.attachPolicyToUser(state)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		"[API ERROR] Failed to Attach Policy to User.",
+		[]error{err},
+		"",
+	)
 
 	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
-	for _, warning := range readCombinedPolicyNotExistErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Combined Policies: Policy Not Found!",
-			warning.Error(),
-		)
-	}
-	for _, err := range readCombinedPolicyErr {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to Read Combined Policies: Unexpected Error!",
-			err.Error(),
-		)
-	}
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Combined Policies for %v: Policy Not Found!", state.UserName),
+		readCombinedPolicyNotExistErr,
+		"",
+	)
+	addDiagnostics(
+		&resp.Diagnostics,
+		"error",
+		fmt.Sprintf("[API ERROR] Failed to Read Combined Policies for %v: Unexpected Error!", state.UserName),
+		readCombinedPolicyErr,
+		"",
+	)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -491,7 +511,7 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 //   - errList: List of errors, return nil if no errors.
 func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyResourceModel) (combinedPoliciesDetail []*policyDetail, attachedPoliciesDetail []*policyDetail, errList []error) {
 	var policies []string
-	plan.AttachedPolicies.ElementsAs(ctx, policies, false)
+	plan.AttachedPolicies.ElementsAs(ctx, &policies, false)
 	combinedPolicyDocuments, excludedPolicies, attachedPoliciesDetail, errList := r.combinePolicyDocument(policies)
 	if errList != nil {
 		return nil, nil, errList
@@ -537,7 +557,6 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 	// policy "statement" will be hitting the limitation of "maximum number of
 	// attached policies" easily.
 	combinedPoliciesDetail = append(combinedPoliciesDetail, excludedPolicies...)
-	attachedPoliciesDetail = append(attachedPoliciesDetail, attachedPoliciesDetail...)
 
 	return combinedPoliciesDetail, attachedPoliciesDetail, nil
 }
@@ -564,9 +583,6 @@ func (r *ramPolicyResource) combinePolicyDocument(attachedPolicies []string) (co
 
 	for _, attachedPolicy := range attachedPoliciesDetail {
 		tempPolicyDocument := attachedPolicy.PolicyDocument.ValueString()
-
-		attachedPoliciesDetail = append(attachedPoliciesDetail, attachedPolicy)
-
 		// If the policy itself have more than 6144 characters, then skip the combine
 		// policy part since splitting the policy "statement" will be hitting the
 		// limitation of "maximum number of attached policies" easily.
@@ -643,7 +659,7 @@ func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (n
 	// and Update() function.
 	if len(notExistErrs) > 0 {
 		// This is to ensure Update() is called.
-		state.AttachedPolicies = types.ListUnknown(types.StringType)
+		state.AttachedPolicies = types.ListNull(types.StringType)
 	}
 
 	state.CombinedPolicesDetail = policyDetails
@@ -660,8 +676,8 @@ func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (n
 //   - unexpectedError: List of unexpected errors to be used as normal error messages, return nil if no errors.
 func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel) (notExistErrs, unexpectedErrs []error) {
 	var policiesName []string
-	for _, policy := range state.CombinedPolicesDetail {
-		policiesName = append(policiesName, policy.PolicyName.ValueString())
+	for _, policyName := range state.AttachedPolicies.Elements() {
+		policiesName = append(policiesName, policyName.String())
 	}
 
 	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom", "System"})
@@ -674,7 +690,7 @@ func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel) (n
 	// and Update() function.
 	if len(notExistErrs) > 0 {
 		// This is to ensure Update() is called.
-		state.AttachedPolicies = types.ListUnknown(types.StringType)
+		state.AttachedPolicies = types.ListNull(types.StringType)
 	}
 
 	state.AttachedPoliciesDetail = policyDetails
@@ -770,7 +786,8 @@ func (r *ramPolicyResource) checkPoliciesDrift(newState, oriState *ramPolicyReso
 
 	if len(driftedPolicies) > 0 {
 		// Set the state to trigger an update.
-		newState.AttachedPolicies = types.ListUnknown(types.StringType)
+		newState.AttachedPolicies = types.ListNull(types.StringType)
+
 		return fmt.Errorf(
 			"the following policies documents had been changed since combining policies: [%s]",
 			strings.Join(driftedPolicies, ", "),
@@ -864,5 +881,30 @@ func handleAPIError(err error) error {
 		}
 	} else {
 		return err
+	}
+}
+
+func addDiagnostics(diags *diag.Diagnostics, severity string, title string, errors []error, description string) {
+	var combinedMessages string
+	validErrors := 0
+
+	for _, err := range errors {
+		if err != nil {
+			combinedMessages += fmt.Sprintf("%v\n", err)
+			validErrors++
+		}
+	}
+
+	if validErrors == 0 {
+		return
+	}
+
+	switch severity {
+	case "warning":
+		diags.AddWarning(title, fmt.Sprintf("%s\n%s", description, combinedMessages))
+	case "error":
+		diags.AddError(title, combinedMessages)
+	default:
+		// Handle unknown severity if needed
 	}
 }
