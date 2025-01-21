@@ -884,7 +884,7 @@ func handleAPIError(err error) error {
 	}
 }
 
-func addDiagnostics(diags *diag.Diagnostics, severity string, title string, errors []error, description string) {
+func addDiagnostics(diags *diag.Diagnostics, severity string, title string, errors []error, extraMessage string) {
 	var combinedMessages string
 	validErrors := 0
 
@@ -899,11 +899,18 @@ func addDiagnostics(diags *diag.Diagnostics, severity string, title string, erro
 		return
 	}
 
+	var message string
+	if extraMessage != "" {
+		message = fmt.Sprintf("%s\n%s", extraMessage, combinedMessages)
+	} else {
+		message = combinedMessages
+	}
+
 	switch severity {
 	case "warning":
-		diags.AddWarning(title, fmt.Sprintf("%s\n%s", description, combinedMessages))
+		diags.AddWarning(title, message)
 	case "error":
-		diags.AddError(title, combinedMessages)
+		diags.AddError(title, message)
 	default:
 		// Handle unknown severity if needed
 	}
