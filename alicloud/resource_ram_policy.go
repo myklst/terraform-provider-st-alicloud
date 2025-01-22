@@ -241,6 +241,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		"",
 	)
 
+	// Set state so that Terraform will trigger update if there are changes in state.
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.WarningsCount() > 0 || resp.Diagnostics.HasError() {
@@ -266,7 +267,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		"",
 	)
 
-	// need to set state so that terraform can decide whether to update
+	// Set state so that Terraform will trigger update if there are changes in state.
 	setStateDiags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.HasError() {
