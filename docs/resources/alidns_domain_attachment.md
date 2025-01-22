@@ -3,7 +3,6 @@
 page_title: "st-alicloud_alidns_domain_attachment Resource - st-alicloud"
 subcategory: ""
 description: |-
-
 ---
 
 # st-alicloud_alidns_domain_attachment (Resource)

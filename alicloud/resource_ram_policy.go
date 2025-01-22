@@ -225,7 +225,6 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		state.Policies = nil
 	}
 
-	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
 	addDiagnostics(
 		&resp.Diagnostics,
