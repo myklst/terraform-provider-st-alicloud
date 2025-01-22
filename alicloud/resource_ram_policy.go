@@ -74,8 +74,8 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Required:    true,
 				ElementType: types.StringType,
 			},
-			"combined_policies_detail": schema.ListNestedAttribute{
-				Description: "A list of combined policies that are attached to users.",
+			"attached_policies_detail": schema.ListNestedAttribute{
+				Description: "A list of policies. Used to compare whether policy has been changed outside of Terraform",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -90,8 +90,8 @@ func (r *ramPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					},
 				},
 			},
-			"attached_policies_detail": schema.ListNestedAttribute{
-				Description: "A list of policies. Used to compare whether policy has been changed outside of Terraform",
+			"combined_policies_detail": schema.ListNestedAttribute{
+				Description: "A list of combined policies that are attached to users.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -142,7 +142,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
 	combinedPolicies, attachedPolicies, errors := r.createPolicy(ctx, plan)
 	addDiagnostics(
 		&resp.Diagnostics,
@@ -666,7 +665,7 @@ func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (n
 	return notExistErrs, nil
 }
 
-// readCombinedPolicy will read the attached policy details.
+// readAttachedPolicy will read the attached policy details.
 //
 // Parameters:
 //   - state: The state configurations, it will directly update the value of the struct since it is a pointer.
