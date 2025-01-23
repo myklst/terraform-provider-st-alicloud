@@ -572,8 +572,12 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 //   - errList: List of errors, return nil if no errors.
 func (r *ramPolicyResource) combinePolicyDocument(attachedPolicies []string) (combinedPolicyDocument []string, excludedPolicies []*policyDetail, attachedPoliciesDetail []*policyDetail, errList []error) {
 	attachedPoliciesDetail, notExistErrList, unexpectedErrList := r.fetchPolicies(attachedPolicies, []string{"Custom", "System"})
+
+	errList = append(errList, notExistErrList...)
+	errList = append(errList, unexpectedErrList...)
+
 	if len(errList) != 0 {
-		return nil, nil, nil, append(unexpectedErrList, notExistErrList...)
+		return nil, nil, nil, errList
 	}
 
 	currentLength := 0
@@ -676,7 +680,7 @@ func (r *ramPolicyResource) readCombinedPolicy(state *ramPolicyResourceModel) (n
 func (r *ramPolicyResource) readAttachedPolicy(state *ramPolicyResourceModel) (notExistErrs, unexpectedErrs []error) {
 	var policiesName []string
 	for _, policyName := range state.AttachedPolicies.Elements() {
-		policiesName = append(policiesName, policyName.String())
+		policiesName = append(policiesName, strings.Trim(policyName.String(), "\""))
 	}
 
 	policyDetails, notExistErrs, unexpectedErrs := r.fetchPolicies(policiesName, []string{"Custom", "System"})
