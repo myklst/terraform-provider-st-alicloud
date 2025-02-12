@@ -221,7 +221,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// TODO: Remove in next version when 'Policies' is moved to CombinedPoliciesDetail.
 	if len(oriState.CombinedPolicesDetail) == 0 && len(oriState.Policies) != 0 {
 		oriState.CombinedPolicesDetail = oriState.Policies
-		state.Policies = nil
+		oriState.Policies = nil
 	}
 
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
