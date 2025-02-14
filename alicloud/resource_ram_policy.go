@@ -842,7 +842,11 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 			}
 
 			if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
-				return handleAPIError(err)
+				// Ignore error where the policy had been deleted
+				// as it is intended to delete the RAM policy.
+				if tea.StringValue(err.(*tea.SDKError).Code) != "EntityNotExist.Policy" {
+					return handleAPIError(err)
+				}
 			}
 		}
 
