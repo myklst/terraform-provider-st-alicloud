@@ -142,6 +142,7 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
 	combinedPolicies, attachedPolicies, errors := r.createPolicy(ctx, plan)
 	addDiagnostics(
 		&resp.Diagnostics,
@@ -150,6 +151,9 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		errors,
 		"",
 	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	state := &ramPolicyResourceModel{}
 	state.UserName = plan.UserName
@@ -165,6 +169,9 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		[]error{err},
 		"",
 	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
@@ -182,7 +189,6 @@ func (r *ramPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		readCombinedPolicyErr,
 		"",
 	)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -221,7 +227,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// TODO: Remove in next version when 'Policies' is moved to CombinedPoliciesDetail.
 	if len(oriState.CombinedPolicesDetail) == 0 && len(oriState.Policies) != 0 {
 		oriState.CombinedPolicesDetail = oriState.Policies
-		state.Policies = nil
+		oriState.Policies = nil
 	}
 
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
@@ -269,10 +275,6 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// Set state so that Terraform will trigger update if there are changes in state.
 	setStateDiags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	if resp.Diagnostics.WarningsCount() > 0 || resp.Diagnostics.HasError() {
 		return
 	}
@@ -283,7 +285,7 @@ func (r *ramPolicyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		"warning",
 		fmt.Sprintf("[API WARNING] Policy Drift Detected for %v.", state.UserName),
 		[]error{compareAttachedPoliciesErr},
-		"",
+		"This resource will be updated in the next terraform apply.",
 	)
 
 	setStateDiags = resp.State.Set(ctx, &state)
@@ -331,13 +333,19 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		readAttachedPolicyErr,
 		"",
 	)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	removePolicyDiags := r.removePolicy(state)
 	resp.Diagnostics.Append(removePolicyDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state.CombinedPolicesDetail = nil
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -350,6 +358,9 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		errors,
 		"",
 	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	state.UserName = plan.UserName
 	state.AttachedPolicies = plan.AttachedPolicies
@@ -364,6 +375,9 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		[]error{err},
 		"",
 	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// Create policy are not expected to have not found warning.
 	readCombinedPolicyNotExistErr, readCombinedPolicyErr := r.readCombinedPolicy(state)
@@ -381,12 +395,11 @@ func (r *ramPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		readCombinedPolicyErr,
 		"",
 	)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	setStateDiags := resp.State.Set(ctx, &state)
+	setStateDiags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -594,6 +607,7 @@ func (r *ramPolicyResource) combinePolicyDocument(attachedPolicies []string) (co
 				PolicyName:     attachedPolicy.PolicyName,
 				PolicyDocument: types.StringValue(tempPolicyDocument),
 			})
+			continue
 		}
 
 		var data map[string]interface{}
@@ -602,8 +616,7 @@ func (r *ramPolicyResource) combinePolicyDocument(attachedPolicies []string) (co
 			return nil, nil, nil, errList
 		}
 
-		statementArr := data["Statement"].([]interface{})
-		statementBytes, err := json.Marshal(statementArr)
+		statementBytes, err := json.Marshal(data["Statement"])
 		if err != nil {
 			errList = append(errList, err)
 			return nil, nil, nil, errList
@@ -820,11 +833,20 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 			}
 
 			if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
-				return handleAPIError(err)
+				// Ignore error where the policy is not attached
+				// to the user as it is intented to detach the
+				// policy from user.
+				if tea.StringValue(err.(*tea.SDKError).Code) != "EntityNotExist.User.Policy" {
+					return handleAPIError(err)
+				}
 			}
 
 			if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
-				return handleAPIError(err)
+				// Ignore error where the policy had been deleted
+				// as it is intended to delete the RAM policy.
+				if tea.StringValue(err.(*tea.SDKError).Code) != "EntityNotExist.Policy" {
+					return handleAPIError(err)
+				}
 			}
 		}
 
