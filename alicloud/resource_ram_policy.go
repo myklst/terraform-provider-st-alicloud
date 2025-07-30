@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -554,7 +553,7 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 	// These policies will be attached directly to the user since splitting the
 	// policy "statement" will be hitting the limitation of "maximum number of
 	// attached policies" easily.
-	combinedPoliciesDetail = slices.Concat(combinedPoliciesDetail, excludedPolicies)
+	combinedPoliciesDetail = append(combinedPoliciesDetail, excludedPolicies...)
 	return combinedPoliciesDetail, attachedPoliciesDetail, nil
 }
 
