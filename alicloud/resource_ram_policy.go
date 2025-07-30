@@ -435,10 +435,9 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 	var username string
 
 	var err error
-	getPolicy := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		for _, policyName := range policyNames {
+	for _, policyName := range policyNames {
+		getPolicy := func() error {
+			runtime := &util.RuntimeOptions{}
 			policyName = strings.ReplaceAll(policyName, " ", "")
 
 			// Retrieves the policy document for the policy
@@ -446,7 +445,6 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 				PolicyName: tea.String(policyName),
 				PolicyType: tea.String("Custom"),
 			}
-
 			getPolicyResponse, err = r.client.GetPolicyWithOptions(getPolicyRequest, runtime)
 			if err != nil {
 				handleAPIError(err)
@@ -457,7 +455,6 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 				PolicyName: tea.String(policyName),
 				PolicyType: tea.String("Custom"),
 			}
-
 			getPolicyEntities, err := r.client.ListEntitiesForPolicyWithOptions(listEntitiesForPolicy, runtime)
 			if err != nil {
 				handleAPIError(err)
@@ -470,21 +467,18 @@ func (r *ramPolicyResource) ImportState(ctx context.Context, req resource.Import
 				}
 				policyDetailsState = append(policyDetailsState, &policyDetail)
 			}
-
 			if getPolicyEntities.Body.Users != nil {
 				for _, user := range getPolicyEntities.Body.Users.User {
 					username = *user.UserName
 				}
 			}
+			return nil
 		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(getPolicy, reconnectBackoff)
-	if err != nil {
-		return
+		reconnectBackoff := backoff.NewExponentialBackOff()
+		reconnectBackoff.MaxElapsedTime = 30 * time.Second
+		if err = backoff.Retry(getPolicy, reconnectBackoff); err != nil {
+			return
+		}
 	}
 
 	var policyList []policyDetail
@@ -529,12 +523,11 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 		return nil, nil, errList
 	}
 
-	createPolicy := func() error {
-		runtime := &util.RuntimeOptions{}
+	for i, policy := range combinedPolicyDocuments {
+		policyName := fmt.Sprintf("%s-%d", plan.UserName.ValueString(), i+1)
 
-		for i, policy := range combinedPolicyDocuments {
-			policyName := fmt.Sprintf("%s-%d", plan.UserName.ValueString(), i+1)
-
+		createPolicy := func() error {
+			runtime := &util.RuntimeOptions{}
 			createPolicyRequest := &alicloudRamClient.CreatePolicyRequest{
 				PolicyName:     tea.String(policyName),
 				PolicyDocument: tea.String(policy),
@@ -543,25 +536,17 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 			if _, err := r.client.CreatePolicyWithOptions(createPolicyRequest, runtime); err != nil {
 				return handleAPIError(err)
 			}
+			return nil
 		}
-
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(createPolicy, reconnectBackoff)
-
-	if err != nil {
-		return nil, nil, []error{err}
-	}
-
-	for i, policies := range combinedPolicyDocuments {
-		policyName := fmt.Sprintf("%s-%d", plan.UserName.ValueString(), i+1)
+		reconnectBackoff := backoff.NewExponentialBackOff()
+		reconnectBackoff.MaxElapsedTime = 30 * time.Second
+		if err := backoff.Retry(createPolicy, reconnectBackoff); err != nil {
+			return nil, nil, []error{err}
+		}
 
 		combinedPoliciesDetail = append(combinedPoliciesDetail, &policyDetail{
 			PolicyName:     types.StringValue(policyName),
-			PolicyDocument: types.StringValue(policies),
+			PolicyDocument: types.StringValue(policy),
 		})
 	}
 
@@ -569,7 +554,6 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 	// policy "statement" will be hitting the limitation of "maximum number of
 	// attached policies" easily.
 	combinedPoliciesDetail = append(combinedPoliciesDetail, excludedPolicies...)
-
 	return combinedPoliciesDetail, attachedPoliciesDetail, nil
 }
 
@@ -818,20 +802,17 @@ func (r *ramPolicyResource) checkPoliciesDrift(newState, oriState *ramPolicyReso
 // Parameters:
 //   - state: The recorded state configurations.
 func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Diagnostics {
-	removePolicy := func() error {
-		for _, combinedPolicy := range state.CombinedPolicesDetail {
+	for _, combinedPolicy := range state.CombinedPolicesDetail {
+		removePolicy := func() error {
 			runtime := &util.RuntimeOptions{}
-
 			detachPolicyFromUserRequest := &alicloudRamClient.DetachPolicyFromUserRequest{
 				PolicyType: tea.String("Custom"),
 				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 				UserName:   tea.String(state.UserName.ValueString()),
 			}
-
 			deletePolicyRequest := &alicloudRamClient.DeletePolicyRequest{
 				PolicyName: tea.String(combinedPolicy.PolicyName.ValueString()),
 			}
-
 			if _, err := r.client.DetachPolicyFromUserWithOptions(detachPolicyFromUserRequest, runtime); err != nil {
 				// Ignore error where the policy is not attached
 				// to the user as it is intented to detach the
@@ -840,7 +821,6 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 					return handleAPIError(err)
 				}
 			}
-
 			if _, err := r.client.DeletePolicyWithOptions(deletePolicyRequest, runtime); err != nil {
 				// Ignore error where the policy had been deleted
 				// as it is intended to delete the RAM policy.
@@ -848,23 +828,19 @@ func (r *ramPolicyResource) removePolicy(state *ramPolicyResourceModel) diag.Dia
 					return handleAPIError(err)
 				}
 			}
+			return nil
 		}
-
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(removePolicy, reconnectBackoff)
-	if err != nil {
-		return diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"[API ERROR] Failed to Delete Policy",
-				err.Error(),
-			),
+		reconnectBackoff := backoff.NewExponentialBackOff()
+		reconnectBackoff.MaxElapsedTime = 30 * time.Second
+		if err := backoff.Retry(removePolicy, reconnectBackoff); err != nil {
+			return diag.Diagnostics{
+				diag.NewErrorDiagnostic(
+					"[API ERROR] Failed to Delete Policy",
+					err.Error(),
+				),
+			}
 		}
 	}
-
 	return nil
 }
 
