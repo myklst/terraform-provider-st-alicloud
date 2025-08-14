@@ -21,10 +21,11 @@ import (
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
-	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
-	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
-	alicloudServicemeshClient  "github.com/alibabacloud-go/servicemesh-20200111/v4/client"
+	alicloudImsClient "github.com/alibabacloud-go/ims-20190815/v4/client"
+	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
+	alicloudServicemeshClient "github.com/alibabacloud-go/servicemesh-20200111/v4/client"
+	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 
 	"github.com/alibabacloud-go/tea/tea"
 )
@@ -43,6 +44,7 @@ type alicloudClients struct {
 	csClient          *alicloudCsClient.Client
 	essClient         *alicloudEssClient.Client
 	servicemeshClient *alicloudServicemeshClient.Client
+	imsClient         *alicloudImsClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -375,6 +377,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud IMS Client
+	imsClientConfig := clientCredentialsConfig
+	imsClientConfig.Endpoint = tea.String("ims.aliyuncs.com")
+	imsClient, err := alicloudImsClient.NewClient(imsClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud Servicemesh API Client",
+			"An unexpected error occurred when creating the AliCloud Servicemesh API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud Servicemesh Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:        baseClient,
@@ -389,6 +406,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		csClient:          csClient,
 		essClient:         essClient,
 		servicemeshClient: servicemeshClient,
+		imsClient:         imsClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -422,5 +440,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewEssClbDefaultServerGroupAttachmentResource,
 		NewCsKubernetesPermissionsResource,
 		NewServicemeshUserPermissionResource,
+		NewUserSSOSettingsResource,
 	}
 }
