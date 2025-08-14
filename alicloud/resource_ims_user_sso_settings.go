@@ -29,10 +29,10 @@ type userSSOSettingsResource struct {
 }
 
 type userSSOSettingsResourceModel struct {
-	SSOEnabled         types.Bool   `tfsdk:"sso_enabled"`
+	SsoEnabled         types.Bool   `tfsdk:"sso_enabled"`
 	MetadataDocument   types.String `tfsdk:"metadata_document"`
+	SsoLoginWithDomain types.Bool   `tfsdk:"sso_login_with_domain"`
 	AuxiliaryDomain    types.String `tfsdk:"auxiliary_domain"`
-	SSOLoginWithDomain types.Bool   `tfsdk:"sso_login_with_domain"`
 }
 
 func (r *userSSOSettingsResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -109,8 +109,8 @@ func (r *userSSOSettingsResource) Read(ctx context.Context, req resource.ReadReq
 
 	sso := GetUserSsoSettings.Body.UserSsoSettings
 	state.MetadataDocument = types.StringValue(*sso.MetadataDocument)
-	state.SSOEnabled = types.BoolValue(*sso.SsoEnabled)
-	state.SSOLoginWithDomain = types.BoolValue(*sso.SsoLoginWithDomain)
+	state.SsoLoginWithDomain = types.BoolValue(*sso.SsoLoginWithDomain)
+	state.SsoEnabled = types.BoolValue(*sso.SsoEnabled)
 
 	if sso.AuxiliaryDomain != nil {
 		state.AuxiliaryDomain = types.StringValue(*sso.AuxiliaryDomain)
@@ -150,10 +150,10 @@ func (r *userSSOSettingsResource) ImportState(ctx context.Context, req resource.
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auxiliary_domain"), auxiliaryDomain)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("sso_enabled"), userSsoSettingsResponse.SsoEnabled)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("metadata_document"), userSsoSettingsResponse.MetadataDocument)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("sso_login_with_domain"), userSsoSettingsResponse.SsoLoginWithDomain)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auxiliary_domain"), auxiliaryDomain)...)
 }
 
 func (r *userSSOSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -188,7 +188,7 @@ func (r *userSSOSettingsResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	// On terraform destroy, disable the User SSO settings (singleton resource) instead of deleting it.
-	plan.SSOEnabled = types.BoolValue(false)
+	plan.SsoEnabled = types.BoolValue(false)
 
 	if err := r.setUserSsoSettings(plan); err != nil {
 		resp.Diagnostics.AddError(
@@ -206,11 +206,19 @@ func (r *userSSOSettingsResource) setUserSsoSettings(plan *userSSOSettingsResour
 		return fmt.Errorf("client is not initialized in userSSOSettingsResource")
 	}
 
+	// To successfully set SsoLoginWithDomain to false, AuxiliaryDomain must first be cleared.
+	var auxiliaryDomain *string
+	if plan.SsoLoginWithDomain.ValueBool() && !plan.AuxiliaryDomain.IsNull() {
+		auxiliaryDomain = tea.String(plan.AuxiliaryDomain.ValueString())
+	} else {
+		auxiliaryDomain = tea.String("")
+	}
+
 	setUserSsoSettingsRequest := &alicloudImsClient.SetUserSsoSettingsRequest{
+		SsoEnabled:         tea.Bool(plan.SsoEnabled.ValueBool()),
 		MetadataDocument:   tea.String(plan.MetadataDocument.ValueString()),
-		AuxiliaryDomain:    tea.String(plan.AuxiliaryDomain.ValueString()),
-		SsoEnabled:         tea.Bool(plan.SSOEnabled.ValueBool()),
-		SsoLoginWithDomain: tea.Bool(plan.SSOLoginWithDomain.ValueBool()),
+		SsoLoginWithDomain: tea.Bool(plan.SsoLoginWithDomain.ValueBool()),
+		AuxiliaryDomain:    auxiliaryDomain,
 	}
 
 	setUserSsoSettings := func() error {
