@@ -13,9 +13,9 @@ Manages the SSO (Single Sign-On) settings for a user, including enabling SSO, sp
 ## Example Usage
 
 ```terraform
-resource "st-alicloud_ims_user_sso_settings" "foo" {
+resource "st-alicloud_ims_user_sso_settings" "example" {
   sso_enabled           = true
-  metadata_document     = "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPEVudGl0eURxxxxxxxxx"
+  metadata_document     = "PD94bWwgdmVyc2lvbj0iMS4wIiBlbxxxxxxxxxxxx"
   sso_login_with_domain = true
   auxiliary_domain      = "xxx.com"
 }
@@ -30,3 +30,17 @@ resource "st-alicloud_ims_user_sso_settings" "foo" {
 - `metadata_document` (String) The Base64-encoded SAML metadata document provided by the identity provider (IdP) for SSO configuration.
 - `sso_login_with_domain` (Boolean) Indicates whether users can log in using their custom domain name instead of the default tenant domain.
 - `auxiliary_domain` (String) The custom auxiliary domain name associated with the SSO configuration, used for login and routing authentication requests.
+
+## Import
+
+ims user_sso_settings can be imported using the auxiliary_domain, e.g.
+
+```
+terraform import st-alicloud_ims_user_sso_settings.example ${auxiliary_domain}
+```
+
+_If no auxiliary domain is set_
+
+```
+terraform import st-alicloud_ims_user_sso_settings.example ""
+```
