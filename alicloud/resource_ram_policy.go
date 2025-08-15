@@ -524,6 +524,7 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 	}
 
 	for i, policy := range combinedPolicyDocuments {
+		var getPolicyResponse *alicloudRamClient.GetPolicyResponse
 		policyName := fmt.Sprintf("%s-%d", plan.UserName.ValueString(), i+1)
 
 		createPolicy := func() error {
@@ -534,7 +535,23 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 			}
 
 			if _, err := r.client.CreatePolicyWithOptions(createPolicyRequest, runtime); err != nil {
-				return handleAPIError(err)
+				// There is a bug where AliCloud API timeout but the policy is
+				// created. So we have to check if the policy exist and whether
+				// the document is the same as expected as before retries.
+				if tea.StringValue(err.(*tea.SDKError).Code) == "EntityAlreadyExists.Policy" {
+					var getPolicyErr error
+					if getPolicyResponse, getPolicyErr = r.client.GetPolicyWithOptions(&alicloudRamClient.GetPolicyRequest{
+						PolicyName: tea.String(policyName),
+						PolicyType: tea.String("Custom"),
+					}, runtime); getPolicyErr != nil {
+						return handleAPIError(getPolicyErr)
+					}
+					if policy != tea.StringValue(getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument) {
+						return backoff.Permanent(err)
+					}
+				} else {
+					return handleAPIError(err)
+				}
 			}
 			return nil
 		}
@@ -544,10 +561,17 @@ func (r *ramPolicyResource) createPolicy(ctx context.Context, plan *ramPolicyRes
 			return nil, nil, []error{err}
 		}
 
-		combinedPoliciesDetail = append(combinedPoliciesDetail, &policyDetail{
-			PolicyName:     types.StringValue(policyName),
-			PolicyDocument: types.StringValue(policy),
-		})
+		if getPolicyResponse != nil {
+			combinedPoliciesDetail = append(combinedPoliciesDetail, &policyDetail{
+				PolicyName:     types.StringValue(tea.StringValue(getPolicyResponse.Body.Policy.PolicyName)),
+				PolicyDocument: types.StringValue(tea.StringValue(getPolicyResponse.Body.DefaultPolicyVersion.PolicyDocument)),
+			})
+		} else {
+			combinedPoliciesDetail = append(combinedPoliciesDetail, &policyDetail{
+				PolicyName:     types.StringValue(policyName),
+				PolicyDocument: types.StringValue(policy),
+			})
+		}
 	}
 
 	// These policies will be attached directly to the user since splitting the
@@ -862,7 +886,12 @@ func (r *ramPolicyResource) attachPolicyToUser(state *ramPolicyResourceModel) (e
 
 			runtime := &util.RuntimeOptions{}
 			if _, err := r.client.AttachPolicyToUserWithOptions(attachPolicyToUserRequest, runtime); err != nil {
-				return handleAPIError(err)
+				// Ignore error where the policy is already attached
+				// to the user as it is intented to attach the
+				// policy from user.
+				if tea.StringValue(err.(*tea.SDKError).Code) != "EntityAlreadyExists.User.Policy" {
+					return handleAPIError(err)
+				}
 			}
 		}
 		return nil
