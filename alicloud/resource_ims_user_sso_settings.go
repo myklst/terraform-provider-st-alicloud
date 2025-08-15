@@ -114,10 +114,10 @@ func (r *userSSOSettingsResource) Read(ctx context.Context, req resource.ReadReq
 		state.SsoLoginWithDomain = types.BoolValue(*sso.SsoLoginWithDomain)
 		state.SsoEnabled = types.BoolValue(*sso.SsoEnabled)
 
-		if sso.AuxiliaryDomain != nil {
+		if *sso.SsoLoginWithDomain {
 			state.AuxiliaryDomain = types.StringValue(*sso.AuxiliaryDomain)
 		} else {
-			state.AuxiliaryDomain = types.StringNull()
+			state.AuxiliaryDomain = types.StringValue("")
 		}
 
 		return nil
@@ -189,7 +189,7 @@ func (r *userSSOSettingsResource) setUserSsoSettings(plan *userSSOSettingsResour
 
 	// To successfully set SsoLoginWithDomain to false, AuxiliaryDomain must first be cleared.
 	var auxiliaryDomain *string
-	if plan.SsoLoginWithDomain.ValueBool() && !plan.AuxiliaryDomain.IsNull() {
+	if plan.SsoLoginWithDomain.ValueBool() {
 		auxiliaryDomain = tea.String(plan.AuxiliaryDomain.ValueString())
 	} else {
 		auxiliaryDomain = tea.String("")
