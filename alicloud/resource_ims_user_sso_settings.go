@@ -9,7 +9,6 @@ import (
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -91,15 +90,42 @@ func (r *userSSOSettingsResource) Create(ctx context.Context, req resource.Creat
 }
 
 func (r *userSSOSettingsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state *userSSOSettingsResourceModel
+	var state userSSOSettingsResourceModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	GetUserSsoSettings, err := r.client.GetUserSsoSettings()
-	if err != nil {
+	readUserSsoSettings := func() error {
+		getUserSsoSettings, err := r.client.GetUserSsoSettings()
+		if err != nil {
+			if sdkErr, ok := err.(*tea.SDKError); ok {
+				if isAbleToRetry(*sdkErr.Code) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			return err
+		}
+
+		sso := getUserSsoSettings.Body.UserSsoSettings
+		state.MetadataDocument = types.StringValue(*sso.MetadataDocument)
+		state.SsoLoginWithDomain = types.BoolValue(*sso.SsoLoginWithDomain)
+		state.SsoEnabled = types.BoolValue(*sso.SsoEnabled)
+
+		if sso.AuxiliaryDomain != nil {
+			state.AuxiliaryDomain = types.StringValue(*sso.AuxiliaryDomain)
+		} else {
+			state.AuxiliaryDomain = types.StringNull()
+		}
+
+		return nil
+	}
+
+	retryBackoff := backoff.NewExponentialBackOff()
+	retryBackoff.MaxElapsedTime = 30 * time.Second
+	if err := backoff.Retry(readUserSsoSettings, retryBackoff); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read User SSO Settings",
 			fmt.Sprintf("Error calling GetUserSsoSettings: %s", err),
@@ -107,53 +133,8 @@ func (r *userSSOSettingsResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	sso := GetUserSsoSettings.Body.UserSsoSettings
-	state.MetadataDocument = types.StringValue(*sso.MetadataDocument)
-	state.SsoLoginWithDomain = types.BoolValue(*sso.SsoLoginWithDomain)
-	state.SsoEnabled = types.BoolValue(*sso.SsoEnabled)
-
-	if sso.AuxiliaryDomain != nil {
-		state.AuxiliaryDomain = types.StringValue(*sso.AuxiliaryDomain)
-	} else {
-		state.AuxiliaryDomain = types.StringNull()
-	}
-
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
-}
-
-func (r *userSSOSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	getUserSsoSettings, err := r.client.GetUserSsoSettings()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to retrieve SSO settings",
-			fmt.Sprintf("Error calling GetUserSsoSettings: %s", err),
-		)
-		return
-	}
-
-	userSsoSettingsResponse := getUserSsoSettings.Body.UserSsoSettings
-	if userSsoSettingsResponse == nil || userSsoSettingsResponse.AuxiliaryDomain == nil {
-		resp.Diagnostics.AddError(
-			"Invalid Response",
-			"No AuxiliaryDomain found in API response",
-		)
-		return
-	}
-
-	auxiliaryDomain := *userSsoSettingsResponse.AuxiliaryDomain
-	if req.ID != auxiliaryDomain {
-		resp.Diagnostics.AddError(
-			"Domain mismatch",
-			fmt.Sprintf("Expected domain %q from AliCloud, but got %q from import command", auxiliaryDomain, req.ID),
-		)
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("sso_enabled"), userSsoSettingsResponse.SsoEnabled)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("metadata_document"), userSsoSettingsResponse.MetadataDocument)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("sso_login_with_domain"), userSsoSettingsResponse.SsoLoginWithDomain)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auxiliary_domain"), auxiliaryDomain)...)
 }
 
 func (r *userSSOSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
