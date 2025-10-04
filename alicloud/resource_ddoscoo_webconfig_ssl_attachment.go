@@ -11,6 +11,7 @@ import (
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -22,8 +23,9 @@ import (
 )
 
 var (
-	_ resource.Resource              = &ddoscooWebconfigSslAttachmentResource{}
-	_ resource.ResourceWithConfigure = &ddoscooWebconfigSslAttachmentResource{}
+	_ resource.Resource                = &ddoscooWebconfigSslAttachmentResource{}
+	_ resource.ResourceWithConfigure   = &ddoscooWebconfigSslAttachmentResource{}
+	_ resource.ResourceWithImportState = &ddoscooWebconfigSslAttachmentResource{}
 )
 
 func NewDdosCooWebconfigSslAttachmentResource() resource.Resource {
@@ -248,6 +250,10 @@ func (r *ddoscooWebconfigSslAttachmentResource) Delete(ctx context.Context, req 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+}
+
+func (r *ddoscooWebconfigSslAttachmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("domain"), req, resp)
 }
 
 // Function to bind certificate to domain
