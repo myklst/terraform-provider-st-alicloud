@@ -9,6 +9,7 @@ import (
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -20,8 +21,9 @@ import (
 )
 
 var (
-	_ resource.Resource              = &ddoscooWebAIProtectConfigResource{}
-	_ resource.ResourceWithConfigure = &ddoscooWebAIProtectConfigResource{}
+	_ resource.Resource                = &ddoscooWebAIProtectConfigResource{}
+	_ resource.ResourceWithConfigure   = &ddoscooWebAIProtectConfigResource{}
+	_ resource.ResourceWithImportState = &ddoscooWebAIProtectConfigResource{}
 )
 
 func NewDdosCooWebAIProtectConfigResource() resource.Resource {
@@ -260,6 +262,10 @@ func (r *ddoscooWebAIProtectConfigResource) Delete(ctx context.Context, req reso
 	if resp.Diagnostics.HasError() {
 		return
 	}
+}
+
+func (r *ddoscooWebAIProtectConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("domain"), req, resp)
 }
 
 // Function to modify AI Protection Mode for domain
