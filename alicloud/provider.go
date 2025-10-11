@@ -20,6 +20,7 @@ import (
 	alicloudCsClient "github.com/alibabacloud-go/cs-20151215/v4/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
+	alicloudAntiddosV4Client "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
 	alicloudImsClient "github.com/alibabacloud-go/ims-20190815/v4/client"
@@ -35,6 +36,7 @@ type alicloudClients struct {
 	baseClient        *alicloudBaseClient.Client
 	cdnClient         *alicloudCdnClient.Client
 	antiddosClient    *alicloudAntiddosClient.Client
+	antiddosClientV4  *alicloudAntiddosV4Client.Client
 	slbClient         *alicloudSlbClient.Client
 	dnsClient         *alicloudDnsClient.Client
 	ramClient         *alicloudRamClient.Client
@@ -246,6 +248,19 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud Antiddos Client V4
+	antiddosClientV4Config := clientCredentialsConfig
+	antiddosClientV4, err := alicloudAntiddosV4Client.NewClient(antiddosClientV4Config)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud Antiddos API Client",
+			"An unexpected error occurred when creating the AliCloud Antiddos API V4 client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud Antiddos Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud SLB Client
 	slbClientConfig := clientCredentialsConfig
 	slbClient, err := alicloudSlbClient.NewClient(slbClientConfig)
@@ -397,6 +412,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		baseClient:        baseClient,
 		cdnClient:         cdnClient,
 		antiddosClient:    antiddosClient,
+		antiddosClientV4:  antiddosClientV4,
 		slbClient:         slbClient,
 		dnsClient:         dnsClient,
 		ramClient:         ramClient,
@@ -434,6 +450,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAlidnsInstanceResource,
 		NewCmsSystemEventContactGroupAttachmentResource,
 		NewDdosCooWebconfigSslAttachmentResource,
+		NewDdosCooWebconfigCCRuleV2Resource,
 		NewAliadbResourceGroupBindResource,
 		NewEmrMetricAutoScalingRulesResource,
 		NewDdosCooWebAIProtectConfigResource,
