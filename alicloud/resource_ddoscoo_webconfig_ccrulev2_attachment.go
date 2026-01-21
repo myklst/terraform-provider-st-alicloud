@@ -3,19 +3,25 @@ package alicloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
+	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
+	openapiutil "github.com/alibabacloud-go/openapi-util/service"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/cenkalti/backoff/v4"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/itchyny/gojq"
 )
 
 var (
@@ -59,6 +65,7 @@ type conditionModel struct {
 	MatchMethod types.String `tfsdk:"match_method"`
 	HeaderName  types.String `tfsdk:"header_name"`
 	Content     types.String `tfsdk:"content"`
+	ContentList types.List   `tfsdk:"content_list"`
 }
 
 type ruleModel struct {
@@ -131,6 +138,26 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Schema(_ context.Context, _ resource.
 										Description: "Matching content.",
 										Required:    false,
 										Optional:    true,
+										Validators: []validator.String{
+											stringvalidator.ConflictsWith(
+												path.MatchRelative().
+													AtParent().
+													AtName("content_list"),
+											),
+										},
+									},
+									"content_list": &schema.ListAttribute{
+										ElementType: types.StringType,
+										Description: "Contents if the matching is one of multiple.",
+										Required:    false,
+										Optional:    true,
+										Validators: []validator.List{
+											listvalidator.ConflictsWith(
+												path.MatchRelative().
+													AtParent().
+													AtName("content"),
+											),
+										},
 									},
 								},
 							},
@@ -294,6 +321,21 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Read(ctx context.Context, req resourc
 							return types.StringPointerValue(cond.HeaderName)
 						})(),
 						Content: types.StringPointerValue(cond.Content),
+						ContentList: (func() basetypes.ListValue {
+							if cond.ContentList == nil {
+								return types.ListNull(types.StringType)
+							}
+
+							contents := []string{}
+							_ = json.Unmarshal([]byte(*cond.ContentList), &contents)
+
+							contentList := []attr.Value{}
+							for _, i := range contents {
+								contentList = append(contentList, types.StringValue(i))
+							}
+
+							return types.ListValueMust(types.StringType, contentList)
+						})(),
 					})
 				}
 
@@ -480,10 +522,11 @@ func (r *ddoscooWebconfigCCRuleV2Resource) createCCRuleV2(rule *ddoscooWebconfig
 	}
 
 	type conditionModel struct {
-		Field       string  `json:"field"`
-		MatchMethod string  `json:"match_method"`
-		HeaderName  *string `json:"header_name,omitempty"`
-		Content     string  `json:"content"`
+		Field       string   `json:"field"`
+		MatchMethod string   `json:"match_method"`
+		HeaderName  *string  `json:"header_name,omitempty"`
+		Content     *string  `json:"content,omitempty"`
+		ContentList []string `json:"content_list,omitempty"`
 	}
 
 	type statusCodeModel struct {
@@ -522,7 +565,16 @@ func (r *ddoscooWebconfigCCRuleV2Resource) createCCRuleV2(rule *ddoscooWebconfig
 						Field:       cond.Field.ValueString(),
 						MatchMethod: cond.MatchMethod.ValueString(),
 						HeaderName:  cond.HeaderName.ValueStringPointer(),
-						Content:     cond.Content.ValueString(),
+						Content:     cond.Content.ValueStringPointer(),
+						ContentList: (func() []string {
+							if len(cond.ContentList.Elements()) == 0 {
+								return nil
+							} else {
+								contentList := []string{}
+								cond.ContentList.ElementsAs(context.Background(), &contentList, true)
+								return contentList
+							}
+						})(),
 					})
 				}
 
@@ -596,25 +648,84 @@ func (r *ddoscooWebconfigCCRuleV2Resource) createCCRuleV2(rule *ddoscooWebconfig
 }
 
 func (r *ddoscooWebconfigCCRuleV2Resource) describeCCRuleV2(domain string) (*alicloudAntiddosClient.DescribeWebCCRulesV2ResponseBody, error) {
-	ccRuleV2DescribeReq := &alicloudAntiddosClient.DescribeWebCCRulesV2Request{
-		Domain: &domain,
-	}
-
 	runtime := &util.RuntimeOptions{}
-	resp, _err := r.client.DescribeWebCCRulesV2WithOptions(ccRuleV2DescribeReq, runtime)
-	if _err != nil {
-		if _t, ok := _err.(*tea.SDKError); ok {
-			if isAbleToRetry(*_t.Code) {
-				return nil, _err
-			} else {
-				return nil, backoff.Permanent(_err)
-			}
-		} else {
-			return nil, _err
-		}
+
+	params := &openapi.Params{
+		Action:      tea.String("DescribeWebCCRulesV2"),
+		Version:     tea.String("2020-01-01"),
+		Protocol:    tea.String("HTTPS"),
+		Method:      tea.String("POST"),
+		AuthType:    tea.String("AK"),
+		Style:       tea.String("RPC"),
+		Pathname:    tea.String("/"),
+		ReqBodyType: tea.String("json"),
+		BodyType:    tea.String("json"),
 	}
 
-	return resp.Body, nil
+	queries := map[string]any{}
+	queries["Domain"] = tea.String(domain)
+
+	request := &openapi.OpenApiRequest{
+		Query: openapiutil.Query(queries),
+	}
+
+	_resp, _err := r.client.CallApi(params, request, runtime)
+	if _err != nil {
+		return nil, _err
+	}
+
+	// Within each CC Rule element, if ContentList is present, convert it to json string 
+	// This temporry gojq implementation is needed due to conversion issues in Aliyun Go SDK
+	// Will be removed in once the Aiyun Go SDK errors are resolved.
+	query, err := gojq.Parse(`
+		.WebCCRules |= [ .[] | walk(
+		  if type == "object"
+		     and has("ContentList")
+		     and (.ContentList | type == "array")
+		     and all(.ContentList[]; type == "string")
+		  then
+		     .ContentList |= tostring
+		  else
+		     .
+		  end
+		) ] | .TotalCount |= tostring
+	`)
+	if err != nil {
+		parseErr := err.(*gojq.ParseError)
+		return nil, fmt.Errorf("cannot parse jq filter: %s, error on token: %s", parseErr.Error(), parseErr.Token)
+	}
+
+	output := []any{}
+	iter := query.Run(_resp["body"])
+	for {
+		v, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, ok := v.(error); ok {
+			if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
+				return nil, fmt.Errorf("jq halted")
+			}
+			if err != nil {
+				return nil, fmt.Errorf("jq run error: %s", err.Error())
+			}
+		}
+		output = append(output, v)
+	}
+
+	filteredResp := output[0]
+	respBytes, err := json.Marshal(filteredResp)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := alicloudAntiddosClient.DescribeWebCCRulesV2ResponseBody{}
+	err = json.Unmarshal(respBytes, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
 }
 
 func (r *ddoscooWebconfigCCRuleV2Resource) deleteCCRuleV2(rule *ddoscooWebconfigCCRuleV2Model) error {
