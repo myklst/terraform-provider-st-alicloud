@@ -50,6 +50,7 @@ Required:
 Optional:
 
 - `content` (String) Matching content.
+- `content_list` (List of String) Contents if the matching is one of multiple.
 - `header_name` (String) Custom HTTP header field name.
 
 

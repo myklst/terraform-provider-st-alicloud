@@ -674,7 +674,7 @@ func (r *ddoscooWebconfigCCRuleV2Resource) describeCCRuleV2(domain string) (*ali
 		return nil, _err
 	}
 
-	// Within each CC Rule element, if ContentList is present, convert it to json string 
+	// Within each CC Rule element, if ContentList is present, convert it to json string
 	// This temporry gojq implementation is needed due to conversion issues in Aliyun Go SDK
 	// Will be removed in once the Aiyun Go SDK errors are resolved.
 	query, err := gojq.Parse(`
