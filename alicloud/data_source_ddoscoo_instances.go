@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
+	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 )

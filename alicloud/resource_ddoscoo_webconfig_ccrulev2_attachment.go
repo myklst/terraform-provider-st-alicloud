@@ -255,7 +255,7 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Configure(_ context.Context, req reso
 	if req.ProviderData == nil {
 		return
 	}
-	r.client = req.ProviderData.(alicloudClients).antiddosClientV4
+	r.client = req.ProviderData.(alicloudClients).antiddosClient
 }
 
 func (r *ddoscooWebconfigCCRuleV2Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

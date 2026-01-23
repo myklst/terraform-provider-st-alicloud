@@ -46,8 +46,6 @@ github.com/alibabacloud-go/darabonba-signature-util v0.0.7 h1:UzCnKvsjPFzApvODDN
 github.com/alibabacloud-go/darabonba-signature-util v0.0.7/go.mod h1:oUzCYV2fcCH797xKdL6BDH8ADIHlzrtKVjeRtunBNTQ=
 github.com/alibabacloud-go/darabonba-string v1.0.2 h1:E714wms5ibdzCqGeYJ9JCFywE5nDyvIXIIQbZVFkkqo=
 github.com/alibabacloud-go/darabonba-string v1.0.2/go.mod h1:93cTfV3vuPhhEwGGpKKqhVW4jLe7tDpo3LUM0i0g6mA=
-github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0 h1:LB78mRvBziY+3lINP9BgZYzheTXSBuihSY/ZZvviykc=
-github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0/go.mod h1:T7n6pi1xQwSQuqVC6N31ICEpfRoV0YtioJ0o/hdZzEE=
 github.com/alibabacloud-go/ddoscoo-20200101/v4 v4.2.1 h1:ALLKVN2sSo7PWtLuuMrlSy73GU4tJP6nIHnsqcxXPpc=
 github.com/alibabacloud-go/ddoscoo-20200101/v4 v4.2.1/go.mod h1:uJ5c3UgACZ6WED9xYUI1dcMgpq5cWMFh6ChQis8YFGM=
 github.com/alibabacloud-go/debug v0.0.0-20190504072949-9472017b5c68/go.mod h1:6pb/Qy8c+lqua8cFpEy7g39NRRqOWc3rOwAy8m5Y2BY=

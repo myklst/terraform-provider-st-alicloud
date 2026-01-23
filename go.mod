@@ -8,7 +8,6 @@ require (
 	github.com/alibabacloud-go/alidns-20150109/v4 v4.0.1
 	github.com/alibabacloud-go/cdn-20180510/v2 v2.0.9
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.13
-	github.com/alibabacloud-go/ddoscoo-20200101/v2 v2.0.0
 	github.com/alibabacloud-go/tea v1.3.13
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
