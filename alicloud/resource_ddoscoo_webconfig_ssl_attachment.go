@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
-	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v2/client"
+	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
 )
 
 var (
