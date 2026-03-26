@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
@@ -24,6 +25,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/itchyny/gojq"
 )
+
+const chunkSize = 10
 
 var (
 	_ resource.Resource                = &ddoscooWebconfigCCRuleV2Resource{}
@@ -267,13 +270,25 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.createCCRuleV2(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to create CC Rule V2.",
-			err.Error(),
-		)
-		return
+	// Handle rules in chunks
+	for i := 0; i < len(plan.RuleList); i += chunkSize {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+chunkSize, len(plan.RuleList))
+
+		chunkedplan := ddoscooWebconfigCCRuleV2Model{
+			Domain:   plan.Domain,
+			Expires:  plan.Expires,
+			RuleList: plan.RuleList[i:end],
+		}
+
+		err := r.createCCRuleV2(&chunkedplan)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to create CC Rule V2.",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	setStateDiags := resp.State.Set(ctx, &plan)
@@ -470,38 +485,61 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Update(ctx context.Context, req resou
 		}
 	}
 
-	err := r.createCCRuleV2(&updates)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to update CC Rule V2.",
-			err.Error(),
-		)
-		return
+	// Handle rules in chunks
+	for i := 0; i < len(updates.RuleList); i += chunkSize {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+chunkSize, len(updates.RuleList))
+
+		chunkedplan := ddoscooWebconfigCCRuleV2Model{
+			Domain:   plan.Domain,
+			Expires:  plan.Expires,
+			RuleList: updates.RuleList[i:end],
+		}
+
+		err := r.createCCRuleV2(&chunkedplan)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to update CC Rule V2.",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	deletedRules := stateRules.Difference(plannedRules)
 	if deletedRules.Cardinality() > 0 {
-		err = r.deleteCCRuleV2(&ddoscooWebconfigCCRuleV2Model{
-			Domain:  state.Domain,
-			Expires: state.Expires,
-			RuleList: (func() []*ruleModel {
-				rules := []*ruleModel{}
+		sortedDeletedRules := deletedRules.Clone().ToSlice()
+		slices.Sort(sortedDeletedRules)
 
-				for _, r := range deletedRules.ToSlice() {
-					rules = append(rules, &ruleModel{
-						Name: types.StringValue(r),
-					})
-				}
+		// Handle rules in chunks
+		for i := 0; i < deletedRules.Cardinality(); i += chunkSize {
+			// Handle last chunk if it's smaller than chunk size
+			end := min(i+chunkSize, deletedRules.Cardinality())
 
-				return rules
-			})(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to update CC Rule V2, during the delete phase.",
-				err.Error(),
-			)
-			return
+			chunkedplan := ddoscooWebconfigCCRuleV2Model{
+				Domain:  state.Domain,
+				Expires: state.Expires,
+				RuleList: (func() []*ruleModel {
+					rules := []*ruleModel{}
+
+					for _, r := range sortedDeletedRules[i:end] {
+						rules = append(rules, &ruleModel{
+							Name: types.StringValue(r),
+						})
+					}
+
+					return rules
+				})(),
+			}
+
+			err := r.deleteCCRuleV2(&chunkedplan)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"[API ERROR] Failed to update CC Rule V2, during the delete phase.",
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
@@ -520,10 +558,10 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	// Handle rules in chunks of 10
-	for i := 0; i < len(state.RuleList); i += 10 {
+	// Handle rules in chunks
+	for i := 0; i < len(state.RuleList); i += chunkSize {
 		// Handle last chunk if it's smaller than chunk size
-		end := min(i+10, len(state.RuleList))
+		end := min(i+chunkSize, len(state.RuleList))
 
 		chunkedState := ddoscooWebconfigCCRuleV2Model{
 			Domain:   state.Domain,
