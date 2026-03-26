@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
@@ -436,17 +437,40 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Update(ctx context.Context, req resou
 		return
 	}
 
-	rulesInPlan := mapset.NewSet[string]()
-	rulesInState := mapset.NewSet[string]()
+	rulesInPlan := map[string]*ruleModel{}
+	rulesInState := map[string]*ruleModel{}
 
 	for _, rule := range plan.RuleList {
-		rulesInPlan.Add(rule.Name.ValueString())
+		rulesInPlan[rule.Name.ValueString()] = rule
 	}
 	for _, rule := range state.RuleList {
-		rulesInState.Add(rule.Name.ValueString())
+		rulesInState[rule.Name.ValueString()] = rule
 	}
 
-	err := r.createCCRuleV2(plan)
+	plannedRules := mapset.NewSetFromMapKeys(rulesInPlan)
+	stateRules := mapset.NewSetFromMapKeys(rulesInState)
+
+	updates := ddoscooWebconfigCCRuleV2Model{
+		Domain:  plan.Domain,
+		Expires: plan.Expires,
+	}
+
+	// New rules that are added in the Terraform update phase, after Terraform create
+	newlyAddedRules := plannedRules.Difference(stateRules)
+	for _, ruleName := range newlyAddedRules.ToSlice() {
+		updates.RuleList = append(updates.RuleList, rulesInPlan[ruleName])
+	}
+
+	// Rules that are present in both state and plan. Some rules may have changed.
+	// Further logic is needed to identify changed rules
+	potentiallyChangedRules := plannedRules.Intersect(stateRules)
+	for _, ruleName := range potentiallyChangedRules.ToSlice() {
+		if !reflect.DeepEqual(rulesInPlan[ruleName], rulesInState[ruleName]) {
+			updates.RuleList = append(updates.RuleList, rulesInPlan[ruleName])
+		}
+	}
+
+	err := r.createCCRuleV2(&updates)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to update CC Rule V2.",
@@ -455,7 +479,7 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Update(ctx context.Context, req resou
 		return
 	}
 
-	deletedRules := rulesInState.Difference(rulesInPlan)
+	deletedRules := stateRules.Difference(plannedRules)
 	if deletedRules.Cardinality() > 0 {
 		err = r.deleteCCRuleV2(&ddoscooWebconfigCCRuleV2Model{
 			Domain:  state.Domain,
