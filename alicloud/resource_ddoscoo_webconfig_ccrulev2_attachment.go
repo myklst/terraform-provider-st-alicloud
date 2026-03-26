@@ -520,13 +520,25 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	err := r.deleteCCRuleV2(state)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to delete CC Rule V2.",
-			err.Error(),
-		)
-		return
+	// Handle rules in chunks of 10
+	for i := 0; i < len(state.RuleList); i += 10 {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+10, len(state.RuleList))
+
+		chunkedState := ddoscooWebconfigCCRuleV2Model{
+			Domain:   state.Domain,
+			Expires:  state.Expires,
+			RuleList: state.RuleList[i:end],
+		}
+
+		err := r.deleteCCRuleV2(&chunkedState)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to delete CC Rule V2.",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	resp.State.RemoveResource(ctx)
