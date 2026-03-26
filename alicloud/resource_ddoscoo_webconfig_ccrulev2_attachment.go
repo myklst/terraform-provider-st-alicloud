@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"slices"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
@@ -23,6 +25,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/itchyny/gojq"
 )
+
+const chunkSize = 10
 
 var (
 	_ resource.Resource                = &ddoscooWebconfigCCRuleV2Resource{}
@@ -266,13 +270,25 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.createCCRuleV2(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to create CC Rule V2.",
-			err.Error(),
-		)
-		return
+	// Handle rules in chunks
+	for i := 0; i < len(plan.RuleList); i += chunkSize {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+chunkSize, len(plan.RuleList))
+
+		chunkedplan := ddoscooWebconfigCCRuleV2Model{
+			Domain:   plan.Domain,
+			Expires:  plan.Expires,
+			RuleList: plan.RuleList[i:end],
+		}
+
+		err := r.createCCRuleV2(&chunkedplan)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to create CC Rule V2.",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	setStateDiags := resp.State.Set(ctx, &plan)
@@ -436,48 +452,94 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Update(ctx context.Context, req resou
 		return
 	}
 
-	rulesInPlan := mapset.NewSet[string]()
-	rulesInState := mapset.NewSet[string]()
+	rulesInPlan := map[string]*ruleModel{}
+	rulesInState := map[string]*ruleModel{}
 
 	for _, rule := range plan.RuleList {
-		rulesInPlan.Add(rule.Name.ValueString())
+		rulesInPlan[rule.Name.ValueString()] = rule
 	}
 	for _, rule := range state.RuleList {
-		rulesInState.Add(rule.Name.ValueString())
+		rulesInState[rule.Name.ValueString()] = rule
 	}
 
-	err := r.createCCRuleV2(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to update CC Rule V2.",
-			err.Error(),
-		)
-		return
+	plannedRules := mapset.NewSetFromMapKeys(rulesInPlan)
+	stateRules := mapset.NewSetFromMapKeys(rulesInState)
+
+	updates := ddoscooWebconfigCCRuleV2Model{
+		Domain:  plan.Domain,
+		Expires: plan.Expires,
 	}
 
-	deletedRules := rulesInState.Difference(rulesInPlan)
-	if deletedRules.Cardinality() > 0 {
-		err = r.deleteCCRuleV2(&ddoscooWebconfigCCRuleV2Model{
-			Domain:  state.Domain,
-			Expires: state.Expires,
-			RuleList: (func() []*ruleModel {
-				rules := []*ruleModel{}
+	// New rules that are added in the Terraform update phase, after Terraform create
+	newlyAddedRules := plannedRules.Difference(stateRules)
+	for _, ruleName := range newlyAddedRules.ToSlice() {
+		updates.RuleList = append(updates.RuleList, rulesInPlan[ruleName])
+	}
 
-				for _, r := range deletedRules.ToSlice() {
-					rules = append(rules, &ruleModel{
-						Name: types.StringValue(r),
-					})
-				}
+	// Rules that are present in both state and plan. Some rules may have changed.
+	// Further logic is needed to identify changed rules
+	potentiallyChangedRules := plannedRules.Intersect(stateRules)
+	for _, ruleName := range potentiallyChangedRules.ToSlice() {
+		if !reflect.DeepEqual(rulesInPlan[ruleName], rulesInState[ruleName]) {
+			updates.RuleList = append(updates.RuleList, rulesInPlan[ruleName])
+		}
+	}
 
-				return rules
-			})(),
-		})
+	// Handle rules in chunks
+	for i := 0; i < len(updates.RuleList); i += chunkSize {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+chunkSize, len(updates.RuleList))
+
+		chunkedplan := ddoscooWebconfigCCRuleV2Model{
+			Domain:   plan.Domain,
+			Expires:  plan.Expires,
+			RuleList: updates.RuleList[i:end],
+		}
+
+		err := r.createCCRuleV2(&chunkedplan)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"[API ERROR] Failed to update CC Rule V2, during the delete phase.",
+				"[API ERROR] Failed to update CC Rule V2.",
 				err.Error(),
 			)
 			return
+		}
+	}
+
+	deletedRules := stateRules.Difference(plannedRules)
+	if deletedRules.Cardinality() > 0 {
+		sortedDeletedRules := deletedRules.Clone().ToSlice()
+		slices.Sort(sortedDeletedRules)
+
+		// Handle rules in chunks
+		for i := 0; i < deletedRules.Cardinality(); i += chunkSize {
+			// Handle last chunk if it's smaller than chunk size
+			end := min(i+chunkSize, deletedRules.Cardinality())
+
+			chunkedplan := ddoscooWebconfigCCRuleV2Model{
+				Domain:  state.Domain,
+				Expires: state.Expires,
+				RuleList: (func() []*ruleModel {
+					rules := []*ruleModel{}
+
+					for _, r := range sortedDeletedRules[i:end] {
+						rules = append(rules, &ruleModel{
+							Name: types.StringValue(r),
+						})
+					}
+
+					return rules
+				})(),
+			}
+
+			err := r.deleteCCRuleV2(&chunkedplan)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"[API ERROR] Failed to update CC Rule V2, during the delete phase.",
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
@@ -496,13 +558,25 @@ func (r *ddoscooWebconfigCCRuleV2Resource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	err := r.deleteCCRuleV2(state)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to delete CC Rule V2.",
-			err.Error(),
-		)
-		return
+	// Handle rules in chunks
+	for i := 0; i < len(state.RuleList); i += chunkSize {
+		// Handle last chunk if it's smaller than chunk size
+		end := min(i+chunkSize, len(state.RuleList))
+
+		chunkedState := ddoscooWebconfigCCRuleV2Model{
+			Domain:   state.Domain,
+			Expires:  state.Expires,
+			RuleList: state.RuleList[i:end],
+		}
+
+		err := r.deleteCCRuleV2(&chunkedState)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to delete CC Rule V2.",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	resp.State.RemoveResource(ctx)

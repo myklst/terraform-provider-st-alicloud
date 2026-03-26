@@ -32,3 +32,6 @@ override.tf.json
 # example: *tfplan*
 
 .vscode/
+
+# Terraform Provider Binary
+terraform-provider-st-alicloud
