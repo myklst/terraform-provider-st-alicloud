@@ -194,5 +194,5 @@ func (r *foasconsoleNamespaceSpecResource) Update(ctx context.Context, req resou
 }
 
 func (r *foasconsoleNamespaceSpecResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Delete logic is empty because we are just modifying an existing workspace namespace.
+	// Delete logic is empty because just modifying an existing workspace namespace.
 }
