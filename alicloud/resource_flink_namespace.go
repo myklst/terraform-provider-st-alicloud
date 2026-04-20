@@ -43,7 +43,7 @@ type foasconsoleNamespaceSpecResourceModel struct {
 }
 
 func (r *foasconsoleNamespaceSpecResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_foasconsole_namespace_spec"
+	resp.TypeName = req.ProviderTypeName + "_foasconsole_namespace"
 }
 
 func (r *foasconsoleNamespaceSpecResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

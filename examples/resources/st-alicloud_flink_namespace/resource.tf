@@ -1,4 +1,4 @@
-resource "st-alicloud_foasconsole_namespace_spec" "namespace" {
+resource "st-alicloud_foasconsole_namespace" "namespace" {
   instance_id = "f_intl-sg-xxxxxxxxxxx"
   namespace   = "test-default"
   region      = "cn-hongkong"
