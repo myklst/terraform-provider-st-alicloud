@@ -201,7 +201,7 @@ func (r *alidnsInstanceResource) Create(ctx context.Context, req resource.Create
 			}
 		}
 
-		if *createInstanceResponse.Body.Code == "PAY.AMOUNT_LIMIT_EXCEEDED" {
+		if *createInstanceResponse.Body.Code != "Success" {
 			return backoff.Permanent(fmt.Errorf("%s", createInstanceResponse.String()))
 		}
 
