@@ -3,7 +3,6 @@ package alicloud
 import (
 	"context"
 	"fmt"
-	"os"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
@@ -109,7 +108,7 @@ func (r *foasconsoleNamespaceSpecResource) Create(ctx context.Context, req resou
 	modifyReq := &foasconsoleClient.ModifyNamespaceSpecV2Request{
 		InstanceId: tea.String(plan.InstanceId.ValueString()),
 		Namespace:  tea.String(plan.Namespace.ValueString()),
-		Region:     tea.String(os.Getenv("ALICLOUD_REGION")),
+		Region:     r.client.RegionId,
 		Ha:         tea.Bool(plan.Ha.ValueBool()),
 	}
 
@@ -160,7 +159,7 @@ func (r *foasconsoleNamespaceSpecResource) Update(ctx context.Context, req resou
 	modifyReq := &foasconsoleClient.ModifyNamespaceSpecV2Request{
 		InstanceId: tea.String(plan.InstanceId.ValueString()),
 		Namespace:  tea.String(plan.Namespace.ValueString()),
-		Region:     tea.String(os.Getenv("ALICLOUD_REGION")),
+		Region:     r.client.RegionId,
 		Ha:         tea.Bool(plan.Ha.ValueBool()),
 	}
 
