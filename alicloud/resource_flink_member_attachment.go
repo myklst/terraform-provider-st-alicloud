@@ -39,7 +39,7 @@ type ververicaMemberResourceModel struct {
 }
 
 func (r *ververicaMemberResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_ververica_member"
+	resp.TypeName = req.ProviderTypeName + "_flink_member_attachment"
 }
 
 func (r *ververicaMemberResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

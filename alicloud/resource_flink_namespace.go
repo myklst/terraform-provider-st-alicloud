@@ -3,6 +3,7 @@ package alicloud
 import (
 	"context"
 	"fmt"
+	"os"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
@@ -36,14 +37,13 @@ type foasconsoleNamespaceSpecResourceModel struct {
 	Id                     types.String       `tfsdk:"id"`
 	InstanceId             types.String       `tfsdk:"instance_id"`
 	Namespace              types.String       `tfsdk:"namespace"`
-	Region                 types.String       `tfsdk:"region"`
 	Ha                     types.Bool         `tfsdk:"ha"`
 	GuaranteedResourceSpec *resourceSpecModel `tfsdk:"guaranteed_resource_spec"`
 	ElasticResourceSpec    *resourceSpecModel `tfsdk:"elastic_resource_spec"`
 }
 
 func (r *foasconsoleNamespaceSpecResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_foasconsole_namespace"
+	resp.TypeName = req.ProviderTypeName + "_flink_namespace"
 }
 
 func (r *foasconsoleNamespaceSpecResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -59,10 +59,6 @@ func (r *foasconsoleNamespaceSpecResource) Schema(_ context.Context, _ resource.
 			},
 			"namespace": schema.StringAttribute{
 				Description: "The name of the namespace.",
-				Required:    true,
-			},
-			"region": schema.StringAttribute{
-				Description: "The region ID (e.g., cn-hongkong).",
 				Required:    true,
 			},
 			"ha": schema.BoolAttribute{
@@ -113,7 +109,7 @@ func (r *foasconsoleNamespaceSpecResource) Create(ctx context.Context, req resou
 	modifyReq := &foasconsoleClient.ModifyNamespaceSpecV2Request{
 		InstanceId: tea.String(plan.InstanceId.ValueString()),
 		Namespace:  tea.String(plan.Namespace.ValueString()),
-		Region:     tea.String(plan.Region.ValueString()),
+		Region:     tea.String(os.Getenv("ALICLOUD_REGION")),
 		Ha:         tea.Bool(plan.Ha.ValueBool()),
 	}
 
@@ -164,7 +160,7 @@ func (r *foasconsoleNamespaceSpecResource) Update(ctx context.Context, req resou
 	modifyReq := &foasconsoleClient.ModifyNamespaceSpecV2Request{
 		InstanceId: tea.String(plan.InstanceId.ValueString()),
 		Namespace:  tea.String(plan.Namespace.ValueString()),
-		Region:     tea.String(plan.Region.ValueString()),
+		Region:     tea.String(os.Getenv("ALICLOUD_REGION")),
 		Ha:         tea.Bool(plan.Ha.ValueBool()),
 	}
 
