@@ -26,6 +26,8 @@ import (
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudServicemeshClient "github.com/alibabacloud-go/servicemesh-20200111/v4/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
+	alicloudVvpClient "github.com/alibabacloud-go/ververica-20220718/client"
+	alicloudFoasconsoleClient "github.com/alibabacloud-go/foasconsole-20211028/v2/client"
 
 	"github.com/alibabacloud-go/tea/tea"
 )
@@ -45,6 +47,8 @@ type alicloudClients struct {
 	essClient         *alicloudEssClient.Client
 	servicemeshClient *alicloudServicemeshClient.Client
 	imsClient         *alicloudImsClient.Client
+	ververicaClient   *alicloudVvpClient.Client
+	foasconsoleClient *alicloudFoasconsoleClient.Client
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -392,6 +396,36 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud Ververica Client
+	ververicaClientConfig := clientCredentialsConfig
+	ververicaClientConfig.Endpoint = tea.String("ververica.cn-hongkong.aliyuncs.com")
+	ververicaClient, err := alicloudVvpClient.NewClient(ververicaClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud Ververica API Client",
+			"An unexpected error occurred when creating the AliCloud Ververica API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud Ververica Client Error: "+err.Error(),
+		)
+		return
+	}
+
+	// AliCloud Foasconsole Client
+	foasconsoleClientConfig := clientCredentialsConfig
+	foasconsoleClientConfig.Endpoint = tea.String("foasconsole.cn-hongkong.aliyuncs.com")
+	foasconsoleClient, err := alicloudFoasconsoleClient.NewClient(foasconsoleClientConfig)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud Foasconsole API Client",
+			"An unexpected error occurred when creating the AliCloud Foasconsole API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud Foasconsole Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud clients wrapper
 	alicloudClients := alicloudClients{
 		baseClient:        baseClient,
@@ -407,6 +441,8 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		essClient:         essClient,
 		servicemeshClient: servicemeshClient,
 		imsClient:         imsClient,
+		ververicaClient:   ververicaClient,
+		foasconsoleClient: foasconsoleClient,
 	}
 
 	resp.DataSourceData = alicloudClients
@@ -442,5 +478,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewCsKubernetesPermissionsResource,
 		NewServicemeshUserPermissionResource,
 		NewUserSSOSettingsResource,
+		NewVervericaMemberResource,
+		NewFoasconsoleNamespaceSpecResource,
 	}
 }
