@@ -20,6 +20,7 @@ import (
 	alicloudCsClient "github.com/alibabacloud-go/cs-20151215/v4/client"
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
+	alicloudEcdClient "github.com/alibabacloud-go/ecd-20200930/v5/client"
 	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
 	alicloudImsClient "github.com/alibabacloud-go/ims-20190815/v4/client"
@@ -39,6 +40,8 @@ type alicloudClients struct {
 	antiddosClient    *alicloudAntiddosClient.Client
 	slbClient         *alicloudSlbClient.Client
 	dnsClient         *alicloudDnsClient.Client
+	customEcdClient   *EcdClient
+	ecdClient         *alicloudEcdClient.Client
 	ramClient         *alicloudRamClient.Client
 	cmsClient         *alicloudCmsClient.Client
 	adbClient         *alicloudAdbClient.Client
@@ -396,6 +399,29 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud ECD SDK Client
+	ecdClientConfig := &alicloudOpenapiClient.Config{
+		RegionId:        &region,
+		AccessKeyId:     &accessKey,
+		AccessKeySecret: &secretKey,
+		Endpoint:        tea.String(fmt.Sprintf("ecd.%s.aliyuncs.com", region)),
+	}
+	ecdClient, err := alicloudEcdClient.NewClient(ecdClientConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud ECD SDK Client",
+			"AliCloud ECD SDK Client Error: "+err.Error(),
+		)
+		return
+	}
+
+	// AliCloud ECD Custom RPC Client (used by simple office site resource)
+	customEcdClient := NewEcdClient(
+		region,
+		accessKey,
+		secretKey,
+	)
+
 	// AliCloud Ververica Client
 	ververicaClientConfig := clientCredentialsConfig
 	ververicaClientConfig.Endpoint = tea.String("ververica.cn-hongkong.aliyuncs.com")
@@ -441,6 +467,8 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		essClient:         essClient,
 		servicemeshClient: servicemeshClient,
 		imsClient:         imsClient,
+		ecdClient:         ecdClient,
+		customEcdClient:   customEcdClient,
 		ververicaClient:   ververicaClient,
 		foasconsoleClient: foasconsoleClient,
 	}
@@ -468,6 +496,8 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewCmsAlarmRuleResource,
 		NewAlidnsDomainAttachmentResource,
 		NewAlidnsInstanceResource,
+		NewAliecdSimpleOfficeSiteResource,
+		NewAliecdDesktopResource,
 		NewCmsSystemEventContactGroupAttachmentResource,
 		NewDdosCooWebconfigSslAttachmentResource,
 		NewDdosCooWebconfigCCRuleV2Resource,

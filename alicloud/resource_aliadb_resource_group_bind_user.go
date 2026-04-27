@@ -167,7 +167,7 @@ func (r *aliadbResourceGroupBindResource) ImportState(ctx context.Context, req r
 func parseImportID(importID string) (string, string, string, error) {
 	id := strings.Split(importID, ":")
 	if len(id) != 3 {
-		return "", "", "", errors.New("Invalid import ID format. The correct format looks like this GroupName:GroupUser:DBClusterID")
+		return "", "", "", errors.New("invalid import ID format. The correct format looks like this GroupName:GroupUser:DBClusterID")
 	}
 
 	groupName := id[0]
