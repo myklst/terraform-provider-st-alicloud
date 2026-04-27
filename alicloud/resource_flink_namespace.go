@@ -207,7 +207,6 @@ func (r *foasconsoleNamespaceSpecResource) ImportState(ctx context.Context, req 
 		return
 	}
 
-	// Save the split parts into the Terraform state
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_id"), idParts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace"), idParts[1])...)
