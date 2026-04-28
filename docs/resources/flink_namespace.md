@@ -7,7 +7,6 @@ description: |-
 ---
 
 # st-alicloud_flink_namespace (Resource)
-
 Manages the Compute Unit (CU) Specs for an existing Alicloud Flink (foasconsole) Namespace.
 
 ## Example Usage
@@ -64,3 +63,11 @@ Required:
 
 - `cpu` (Number)
 - `memory_gb` (Number)
+
+## Import
+
+Flink namespace can be imported using the instance_id and namespace, e.g.
+
+```terraform
+terraform import st-alicloud_flink_namespace.namespace <instance_id>:<namespace>
+```
