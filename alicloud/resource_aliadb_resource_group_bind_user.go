@@ -161,7 +161,6 @@ func (r *aliadbResourceGroupBindResource) ImportState(ctx context.Context, req r
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_name"), groupName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_user"), userName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dbcluster_id"), dbClusterId)...)
-
 }
 
 func parseImportID(importID string) (string, string, string, error) {
