@@ -7,6 +7,7 @@ description: |-
 ---
 
 # st-alicloud_flink_namespace (Resource)
+
 Manages the Compute Unit (CU) Specs for an existing Alicloud Flink (foasconsole) Namespace.
 
 ## Example Usage
