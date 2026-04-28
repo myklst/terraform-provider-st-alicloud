@@ -64,3 +64,11 @@ Required:
 
 - `cpu` (Number)
 - `memory_gb` (Number)
+
+## Import
+
+Flink namespace can be imported using the instance_id and namespace, e.g.
+
+```terraform
+terraform import st-alicloud_flink_namespace.namespace <instance_id>:<namespace>
+```
