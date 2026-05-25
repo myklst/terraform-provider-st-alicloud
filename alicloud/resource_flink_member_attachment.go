@@ -47,21 +47,30 @@ func (r *ververicaMemberResource) Schema(_ context.Context, _ resource.SchemaReq
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed: true,
-				PlanModifiers:[]planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"workspace_id": schema.StringAttribute{
 				Description: "The ID of the Flink Workspace.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"namespace": schema.StringAttribute{
 				Description: "The namespace of the Ververica workspace.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"member_id": schema.StringAttribute{
 				Description: "The RAM User ID to add as a member.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"role": schema.StringAttribute{
 				Description: "The role of the member.",
@@ -133,13 +142,17 @@ func (r *ververicaMemberResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-
 	memberFound := false
-	for _, member := range listResp.Body.Data {
-		if *member.Member == state.MemberId.ValueString() {
-			memberFound = true
-			state.Role = types.StringValue(*member.Role)
-			break
+
+	if listResp != nil && listResp.Body != nil && listResp.Body.Data != nil {
+		for _, member := range listResp.Body.Data {
+			if member != nil && member.Member != nil && *member.Member == state.MemberId.ValueString() {
+				memberFound = true
+				if member.Role != nil {
+					state.Role = types.StringValue(*member.Role)
+				}
+				break
+			}
 		}
 	}
 
