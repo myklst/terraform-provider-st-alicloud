@@ -34,3 +34,11 @@ resource "st-alicloud_flink_member_attachment" "member" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+## Import
+
+Flink member can be imported using the resource_id, namespace, and member_id, e.g.
+
+```terraform
+terraform import 'st-alicloud_flink_member_attachment.member["<user_name>"]' '<resource_id>:<namespace>:<member_id>'
+```
