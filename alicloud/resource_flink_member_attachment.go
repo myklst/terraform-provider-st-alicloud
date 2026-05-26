@@ -7,6 +7,7 @@ import (
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -18,8 +19,9 @@ import (
 )
 
 var (
-	_ resource.Resource              = &ververicaMemberResource{}
-	_ resource.ResourceWithConfigure = &ververicaMemberResource{}
+	_ resource.Resource                = &ververicaMemberResource{}
+	_ resource.ResourceWithConfigure   = &ververicaMemberResource{}
+	_ resource.ResourceWithImportState = &ververicaMemberResource{}
 )
 
 func NewVervericaMemberResource() resource.Resource {
@@ -134,11 +136,10 @@ func (r *ververicaMemberResource) Read(ctx context.Context, req resource.ReadReq
 	runtime := &util.RuntimeOptions{}
 	listResp, err := r.client.ListMembersWithOptions(tea.String(state.Namespace.ValueString()), listReq, headers, runtime)
 	if err != nil {
-		if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "InvalidWorkspace") {
-			resp.State.RemoveResource(ctx)
-			return
-		}
-		resp.Diagnostics.AddError("Failed to Read Ververica Members", err.Error())
+		resp.Diagnostics.AddError(
+			"Failed to Read Ververica Members",
+			fmt.Sprintf("Workspace ID: %s, Namespace: %s, Error: %s", state.WorkspaceId.ValueString(), state.Namespace.ValueString(), err.Error()),
+		)
 		return
 	}
 
@@ -223,4 +224,21 @@ func (r *ververicaMemberResource) Delete(ctx context.Context, req resource.Delet
 		resp.Diagnostics.AddError("Failed to Delete Ververica Member", err.Error())
 		return
 	}
+}
+
+func (r *ververicaMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	idParts := strings.Split(req.ID, ":")
+
+	if len(idParts) != 3 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
+		resp.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import format: 'workspace_id:namespace:member_id'. Got: %q", req.ID),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("workspace_id"), idParts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace"), idParts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), idParts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 }
