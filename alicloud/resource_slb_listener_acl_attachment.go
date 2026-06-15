@@ -121,7 +121,7 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 
 	listenerId := state.ListenerId.ValueString()
 
-	_, aclIds, err := r.readListenerAcl(listenerId)
+	aclStatus, aclIds, err := r.readListenerAcl(listenerId)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to read SLB listener ACL attribute.",
@@ -130,8 +130,9 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 		return
 	}
 
-	// If no ACL IDs attached, the attachment is gone
-	if len(aclIds) == 0 {
+	// If ACL is off, the attachment resource is gone —
+	// even if AclId still has values, they're not active.
+	if aclStatus != "on" {
 		resp.State.RemoveResource(ctx)
 		return
 	}
