@@ -345,14 +345,7 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	// Build an empty acl_ids list for delete
-	emptyAclIds, diags := types.ListValueFrom(ctx, types.StringType, []string{})
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString(), emptyAclIds)
+	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to disable SLB listener access control.",
@@ -470,20 +463,14 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 // deleteAclConfig disables ACL on the listener. Unlike setAclConfig, it does NOT
 // wait for listener to be running — during destroy the listener may be shutting down.
 // If the listener is already gone, treat as success.
-func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string, aclIdsList types.List) error {
+func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
 		return err
 	}
 
-	// Convert acl_ids list to comma-separated string using ElementsAs
-	aclIdStrs, err := aclIdsFromList(ctx, aclIdsList)
-	if err != nil {
-		return err
-	}
-	aclIds := strings.Join(aclIdStrs, ",")
-
-	// No waitForListenerReady on delete — listener may be in transitional/shutting-down state
+	// Only send AclStatus="off" — do NOT send AclType or AclId.
+	// Sending empty AclType/AclId can corrupt the listener config on the API side.
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
 
@@ -493,13 +480,11 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
 				AclStatus:      tea.String("off"),
-				AclType:        tea.String(""),
-				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(request, runtime)
 			if err != nil {
 				if isListenerGoneError(err) {
-					return nil // listener already gone, delete succeeded
+					return nil
 				}
 				if isRetryableOrStatusError(err) {
 					return err
@@ -511,8 +496,6 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
 				AclStatus:      tea.String("off"),
-				AclType:        tea.String(""),
-				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(request, runtime)
 			if err != nil {
@@ -529,8 +512,6 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
 				AclStatus:      tea.String("off"),
-				AclType:        tea.String(""),
-				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerTCPListenerAttributeWithOptions(request, runtime)
 			if err != nil {
@@ -547,8 +528,6 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
 				AclStatus:      tea.String("off"),
-				AclType:        tea.String(""),
-				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerUDPListenerAttributeWithOptions(request, runtime)
 			if err != nil {
