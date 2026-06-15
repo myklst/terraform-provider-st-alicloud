@@ -25,7 +25,7 @@ var (
 	_ resource.ResourceWithImportState = &slbListenerAclAttachmentResource{}
 )
 
-func NewSlbListenerAclAttachmentResource() resource.Resource {
+func NewSlbListenerWhitelistAclAttachmentResource() resource.Resource {
 	return &slbListenerAclAttachmentResource{}
 }
 
@@ -40,7 +40,7 @@ type slbListenerAclAttachmentModel struct {
 }
 
 func (r *slbListenerAclAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_slb_listener_acl_attachment"
+	resp.TypeName = req.ProviderTypeName + "_slb_listener_whitelist_acl_attachment"
 }
 
 func (r *slbListenerAclAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
