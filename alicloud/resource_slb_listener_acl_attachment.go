@@ -355,7 +355,7 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 		return nil
 	}
 
-		// Retry backoff
+	// Retry backoff
 	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
 	err = backoff.Retry(readFn, reconnectBackoff)
