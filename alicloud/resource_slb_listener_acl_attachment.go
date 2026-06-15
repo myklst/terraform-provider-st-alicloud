@@ -460,8 +460,8 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 }
 
 // deleteAclConfig disables ACL on the listener by setting AclStatus="off".
-// It waits for the listener to be ready first, retries on status errors,
-// and verifies the ACL was actually disabled by reading back.
+// Only sends AclStatus — does NOT send AclType or AclId to avoid corrupting
+// the listener config. Retries on transient status errors.
 // If the listener is already gone, treat as success.
 func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
