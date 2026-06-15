@@ -179,7 +179,7 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString())
+	err := r.deleteAclConfig(state.ListenerId.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to disable SLB listener access control.",
@@ -431,7 +431,7 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 // Only sends AclStatus — does NOT send AclType or AclId to avoid corrupting
 // the listener config. Retries on transient status errors.
 // If the listener is already gone, treat as success.
-func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string) error {
+func (r *slbListenerAclAttachmentResource) deleteAclConfig(listenerId string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
 		return err
