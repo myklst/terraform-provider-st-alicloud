@@ -85,76 +85,6 @@ func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error
 	return result, nil
 }
 
-// waitForListenerReady polls the listener attribute until its Status is "running".
-func (r *slbListenerAclAttachmentResource) waitForListenerReady(loadBalancerId, protocol string, listenerPort int64) error {
-	checkReady := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		switch strings.ToLower(protocol) {
-		case "http":
-			req := &alicloudSlbClient.DescribeLoadBalancerHTTPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}
-			resp, err := r.client.DescribeLoadBalancerHTTPListenerAttributeWithOptions(req, runtime)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			status := tea.ToString(resp.Body.Status)
-			if status != "running" {
-				return fmt.Errorf("listener status is %q, waiting for running", status)
-			}
-		case "https":
-			req := &alicloudSlbClient.DescribeLoadBalancerHTTPSListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}
-			resp, err := r.client.DescribeLoadBalancerHTTPSListenerAttributeWithOptions(req, runtime)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			status := tea.ToString(resp.Body.Status)
-			if status != "running" {
-				return fmt.Errorf("listener status is %q, waiting for running", status)
-			}
-		case "tcp":
-			req := &alicloudSlbClient.DescribeLoadBalancerTCPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}
-			resp, err := r.client.DescribeLoadBalancerTCPListenerAttributeWithOptions(req, runtime)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			status := tea.ToString(resp.Body.Status)
-			if status != "running" {
-				return fmt.Errorf("listener status is %q, waiting for running", status)
-			}
-		case "udp":
-			req := &alicloudSlbClient.DescribeLoadBalancerUDPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}
-			resp, err := r.client.DescribeLoadBalancerUDPListenerAttributeWithOptions(req, runtime)
-			if err != nil {
-				return backoff.Permanent(err)
-			}
-			status := tea.ToString(resp.Body.Status)
-			if status != "running" {
-				return fmt.Errorf("listener status is %q, waiting for running", status)
-			}
-		default:
-			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s", protocol))
-		}
-		return nil
-	}
-
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 3 * time.Minute
-	bo.InitialInterval = 5 * time.Second
-	return backoff.Retry(checkReady, bo)
-}
-
 // readListenerAcl reads the ACL configuration from the listener attribute API.
 // Returns (aclStatus, aclType, aclIds, error).
 func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, []string, error) {
@@ -444,12 +374,6 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 		return err
 	}
 	aclIds := strings.Join(aclIdStrs, ",")
-
-	// Wait for listener to be ready before setting ACL
-	err = r.waitForListenerReady(loadBalancerId, protocol, listenerPort)
-	if err != nil {
-		return fmt.Errorf("listener not ready: %w", err)
-	}
 
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
