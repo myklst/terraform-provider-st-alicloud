@@ -414,7 +414,7 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(ctx, state.ListenerId.ValueString(), emptyAclIds, "off", "")
+	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString(), emptyAclIds)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to disable SLB listener access control.",
@@ -531,4 +531,126 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 	}
 
 	return nil
+}
+
+// deleteAclConfig disables ACL on the listener. Unlike setAclConfig, it does NOT
+// wait for listener to be running — during destroy the listener may be shutting down.
+// If the listener is already gone, treat as success.
+func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string, aclIdsList types.List) error {
+	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
+	if err != nil {
+		return err
+	}
+
+	// Convert acl_ids list to comma-separated string using ElementsAs
+	aclIdStrs, err := aclIdsFromList(ctx, aclIdsList)
+	if err != nil {
+		return err
+	}
+	aclIds := strings.Join(aclIdStrs, ",")
+
+	// No waitForListenerReady on delete — listener may be in transitional/shutting-down state
+	setAcl := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		switch strings.ToLower(protocol) {
+		case "http":
+			request := &alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String("off"),
+				AclType:        tea.String(""),
+				AclId:          tea.String(aclIds),
+			}
+			_, err := r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(request, runtime)
+			if err != nil {
+				if isListenerGoneError(err) {
+					return nil // listener already gone, delete succeeded
+				}
+				if isRetryableOrStatusError(err) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+		case "https":
+			request := &alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String("off"),
+				AclType:        tea.String(""),
+				AclId:          tea.String(aclIds),
+			}
+			_, err := r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(request, runtime)
+			if err != nil {
+				if isListenerGoneError(err) {
+					return nil
+				}
+				if isRetryableOrStatusError(err) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+		case "tcp":
+			request := &alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String("off"),
+				AclType:        tea.String(""),
+				AclId:          tea.String(aclIds),
+			}
+			_, err := r.client.SetLoadBalancerTCPListenerAttributeWithOptions(request, runtime)
+			if err != nil {
+				if isListenerGoneError(err) {
+					return nil
+				}
+				if isRetryableOrStatusError(err) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+		case "udp":
+			request := &alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String("off"),
+				AclType:        tea.String(""),
+				AclId:          tea.String(aclIds),
+			}
+			_, err := r.client.SetLoadBalancerUDPListenerAttributeWithOptions(request, runtime)
+			if err != nil {
+				if isListenerGoneError(err) {
+					return nil
+				}
+				if isRetryableOrStatusError(err) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+		default:
+			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s, must be one of: http, https, tcp, udp", protocol))
+		}
+
+		return nil
+	}
+
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = 2 * time.Minute
+	bo.InitialInterval = 3 * time.Second
+	err = backoff.Retry(setAcl, bo)
+	if err != nil {
+		return fmt.Errorf("failed to disable ACL on listener: %w", err)
+	}
+
+	return nil
+}
+
+// isListenerGoneError returns true if the error indicates the listener no longer exists.
+func isListenerGoneError(err error) bool {
+	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
+		code := *sdkErr.Code
+		// Listener not found or SLB not found
+		return code == "InvalidListener" || code == "NoSuchListener" ||
+			code == "InvalidLoadBalancerId.NotFound" || code == "ResourceNotFound"
+	}
+	return false
 }
