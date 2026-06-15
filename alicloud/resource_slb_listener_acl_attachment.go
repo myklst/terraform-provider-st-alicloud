@@ -364,7 +364,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 }
 
 // setAclConfig sets the ACL configuration on the SLB listener using SetListenerAttribute.
-// First waits for the listener to be in "running" status, then applies the ACL config.
 // Retries on OperationFailed.ListenerStatusNotSupport since that's a transient error.
 func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, listenerId string, aclIdsList types.List, aclStatus string, aclType string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
@@ -463,8 +462,9 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 	return nil
 }
 
-// deleteAclConfig disables ACL on the listener. Unlike setAclConfig, it does NOT
-// wait for listener to be running — during destroy the listener may be shutting down.
+// deleteAclConfig disables ACL on the listener by setting AclStatus="off".
+// It waits for the listener to be ready first, retries on status errors,
+// and verifies the ACL was actually disabled by reading back.
 // If the listener is already gone, treat as success.
 func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, listenerId string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
@@ -555,6 +555,16 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 	err = backoff.Retry(setAcl, bo)
 	if err != nil {
 		return fmt.Errorf("failed to disable ACL on listener: %w", err)
+	}
+
+	// Verify the ACL was actually disabled by reading back.
+	aclStatus, _, _, readErr := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
+	if readErr != nil {
+		// Read failure is not fatal for delete — the API call succeeded.
+		return nil
+	}
+	if aclStatus != "off" {
+		return fmt.Errorf("ACL disable verification failed: AclStatus is %q, expected \"off\"", aclStatus)
 	}
 
 	return nil
