@@ -15,10 +15,8 @@ Attach ACL(s) to an SLB listener and enable access control with white list type.
 
 ```hcl
 resource "st-alicloud_slb_listener_acl_attachment" "example" {
-  load_balancer_id = "lb-1234567890"
-  listener_port    = 80
-  protocol         = "tcp"
-  acl_ids          = ["acl-1234567890", "acl-0987654321"]
+  listener_id = "lb-1234567890:tcp:80"
+  acl_ids     = ["acl-1234567890", "acl-0987654321"]
 }
 ```
 
@@ -26,22 +24,18 @@ resource "st-alicloud_slb_listener_acl_attachment" "example" {
 
 The following arguments are supported:
 
-* `load_balancer_id` - (Required, ForceNew) The ID of the SLB instance.
-* `listener_port` - (Required, ForceNew) The listener port.
-* `protocol` - (Required, ForceNew) The listener protocol. Valid values: `http`, `https`, `tcp`, `udp`.
+* `listener_id` - (Required, ForceNew) The listener ID in the format `load_balancer_id:protocol:port` (e.g. `lb-xxx:tcp:80`).
 * `acl_ids` - (Required) List of ACL IDs to attach to the listener.
 
 ## Attributes Reference
 
 The following attributes are exported:
 
-* `id` - Resource ID, formatted as `load_balancer_id:protocol:listener_port`.
-* `acl_status` - The access control status. Always `on` when ACL is attached.
-* `acl_type` - The access control type. Always `white`.
+* `id` - Same as `listener_id`.
 
 ## Import
 
-SLB Listener ACL Attachment can be imported using the ID format `load_balancer_id:protocol:listener_port`, e.g.,
+SLB Listener ACL Attachment can be imported using the `listener_id`, e.g.,
 
 ```shell
 terraform import st-alicloud_slb_listener_acl_attachment.example lb-1234567890:tcp:80
