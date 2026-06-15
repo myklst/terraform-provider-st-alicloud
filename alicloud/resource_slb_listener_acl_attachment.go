@@ -105,7 +105,7 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds)
+	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to attach ACL to SLB listener.",
@@ -225,7 +225,7 @@ func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds)
+	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to update SLB listener ACL attachment.",
@@ -247,7 +247,7 @@ func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resou
 	}
 }
 
-// Delete removes the ACL attachment by turning off access control.
+// Delete removes the ACL attachment by turning off access control via SetListenerAttribute.
 func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state *slbListenerAclAttachmentModel
 	diags := req.State.Get(ctx, &state)
@@ -256,41 +256,14 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	listenerId := state.ListenerId.ValueString()
-	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid listener_id", err.Error())
+	// Build an empty acl_ids list for delete
+	emptyAclIds, diags := types.ListValueFrom(ctx, types.StringType, []string{})
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	disableAcl := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		request := &alicloudSlbClient.SetListenerAccessControlStatusRequest{
-			LoadBalancerId:      tea.String(loadBalancerId),
-			ListenerPort:        tea.Int32(int32(listenerPort)),
-			ListenerProtocol:    tea.String(protocol),
-			AccessControlStatus: tea.String("off"),
-		}
-
-		_, err := r.client.SetListenerAccessControlStatusWithOptions(request, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(disableAcl, reconnectBackoff)
+	err := r.setAclConfig(state.ListenerId.ValueString(), emptyAclIds, "off", "")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to disable SLB listener access control.",
@@ -305,8 +278,9 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
-// setAclConfig enables access control and sets ACL type + IDs on the listener.
-func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclIdsList types.List) error {
+// setAclConfig sets the ACL configuration on the SLB listener using SetListenerAttribute.
+// This handles both enabling (aclStatus=on, aclType=white, aclIds) and disabling (aclStatus=off).
+func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclIdsList types.List, aclStatus string, aclType string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
 		return err
@@ -319,40 +293,6 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 	}
 	aclIds := strings.Join(aclIdStrs, ",")
 
-	// Step 1: Enable access control on the listener
-	enableAcl := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		request := &alicloudSlbClient.SetListenerAccessControlStatusRequest{
-			LoadBalancerId:      tea.String(loadBalancerId),
-			ListenerPort:        tea.Int32(int32(listenerPort)),
-			ListenerProtocol:    tea.String(protocol),
-			AccessControlStatus: tea.String("on"),
-		}
-
-		_, err := r.client.SetListenerAccessControlStatusWithOptions(request, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(enableAcl, reconnectBackoff)
-	if err != nil {
-		return fmt.Errorf("failed to enable access control: %w", err)
-	}
-
-	// Step 2: Set ACL type and ACL IDs using the protocol-specific SetListenerAttribute API
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
 
@@ -361,8 +301,8 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 			request := &alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("on"),
-				AclType:        tea.String("white"),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        tea.String(aclType),
 				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(request, runtime)
@@ -381,8 +321,8 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 			request := &alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("on"),
-				AclType:        tea.String("white"),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        tea.String(aclType),
 				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(request, runtime)
@@ -401,8 +341,8 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 			request := &alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("on"),
-				AclType:        tea.String("white"),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        tea.String(aclType),
 				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerTCPListenerAttributeWithOptions(request, runtime)
@@ -421,8 +361,8 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 			request := &alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
 				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("on"),
-				AclType:        tea.String("white"),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        tea.String(aclType),
 				AclId:          tea.String(aclIds),
 			}
 			_, err := r.client.SetLoadBalancerUDPListenerAttributeWithOptions(request, runtime)
@@ -444,7 +384,7 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclId
 		return nil
 	}
 
-	reconnectBackoff = backoff.NewExponentialBackOff()
+	reconnectBackoff := backoff.NewExponentialBackOff()
 	reconnectBackoff.MaxElapsedTime = 30 * time.Second
 	err = backoff.Retry(setAcl, reconnectBackoff)
 	if err != nil {
