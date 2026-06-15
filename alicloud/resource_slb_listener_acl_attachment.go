@@ -120,13 +120,8 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 	}
 
 	listenerId := state.ListenerId.ValueString()
-	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid listener_id", err.Error())
-		return
-	}
 
-	_, _, aclIds, err := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
+	_, _, aclIds, err := r.readListenerAcl(listenerId)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to read SLB listener ACL attribute.",
@@ -275,7 +270,12 @@ func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error
 
 // readListenerAcl reads the ACL configuration from the listener attribute API.
 // Returns (aclStatus, aclType, aclIds, error).
-func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, []string, error) {
+func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (string, string, []string, error) {
+	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
+	if err != nil {
+		return "", "", nil, err
+	}
+
 	var aclStatus, aclType, aclIdStr string
 
 	readFn := func() error {
@@ -350,7 +350,7 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 
 	bo := backoff.NewExponentialBackOff()
 	bo.MaxElapsedTime = 30 * time.Second
-	err := backoff.Retry(readFn, bo)
+	err = backoff.Retry(readFn, bo)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -558,7 +558,7 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 	}
 
 	// Verify the ACL was actually disabled by reading back.
-	aclStatus, _, _, readErr := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
+	aclStatus, _, _, readErr := r.readListenerAcl(listenerId)
 	if readErr != nil {
 		// Read failure is not fatal for delete — the API call succeeded.
 		return nil
