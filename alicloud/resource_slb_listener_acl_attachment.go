@@ -192,8 +192,6 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
-// readListenerAcl reads the ACL configuration using DescribeLoadBalancerListeners.
-// Returns (aclStatus, aclIds, error). Retries on transient errors.
 func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (string, []string, error) {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
@@ -228,9 +226,9 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 		return nil
 	}
 
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(readFn, bo)
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(readFn, reconnectBackoff)
 	if err != nil {
 		return "", nil, err
 	}
@@ -242,8 +240,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	return aclStatus, aclIds, nil
 }
 
-// setAclConfig enables ACL on the listener with the given ACL IDs, type, and status.
-// Retries on OperationFailed.ListenerStatusNotSupport since that's a transient error.
 func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, listenerId string, aclIdsList types.List, aclStatus string, aclType string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
