@@ -192,35 +192,6 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
-// parseListenerId parses "lb-xxx:protocol:port" into (loadBalancerId, protocol, listenerPort).
-func parseListenerId(listenerId string) (loadBalancerId string, protocol string, listenerPort int64, err error) {
-	parts := strings.Split(listenerId, ":")
-	if len(parts) != 3 {
-		err = fmt.Errorf("invalid listener_id format: %q, expected load_balancer_id:protocol:port", listenerId)
-		return
-	}
-	loadBalancerId = parts[0]
-	protocol = parts[1]
-	_, err = fmt.Sscanf(parts[2], "%d", &listenerPort)
-	if err != nil {
-		err = fmt.Errorf("invalid port in listener_id %q: %w", listenerId, err)
-	}
-	return
-}
-
-// isRetryableOrStatusError returns true if the error is retryable (from the global list)
-// or a listener status error (OperationFailed.ListenerStatusNotSupport), which is transient.
-func isRetryableOrStatusError(err error) bool {
-	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
-		code := strings.ToLower(*sdkErr.Code)
-		if code == "operationfailed.listenerstatusnotsupport" {
-			return true
-		}
-		return isAbleToRetry(*sdkErr.Code)
-	}
-	return false
-}
-
 // describeListenerAcl calls the protocol-specific DescribeLoadBalancerListenerAttribute API.
 // Returns (aclStatus, aclId, error). aclId is comma-separated if multiple.
 func (r *slbListenerAclAttachmentResource) describeListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, error) {
@@ -270,56 +241,6 @@ func (r *slbListenerAclAttachmentResource) describeListenerAcl(loadBalancerId, p
 	default:
 		return "", "", fmt.Errorf("unsupported protocol: %s", protocol)
 	}
-}
-
-// setListenerAclAttribute calls the protocol-specific SetLoadBalancerListenerAttribute API.
-// Pass nil for aclType/aclId to omit them from the request (used by delete).
-func (r *slbListenerAclAttachmentResource) setListenerAclAttribute(loadBalancerId, protocol string, listenerPort int64, aclStatus string, aclType *string, aclId *string) error {
-	runtime := &util.RuntimeOptions{}
-	var apiErr error
-
-	switch strings.ToLower(protocol) {
-	case "http":
-		_, apiErr = r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(
-			&alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        aclType,
-				AclId:          aclId,
-			}, runtime)
-	case "https":
-		_, apiErr = r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(
-			&alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        aclType,
-				AclId:          aclId,
-			}, runtime)
-	case "tcp":
-		_, apiErr = r.client.SetLoadBalancerTCPListenerAttributeWithOptions(
-			&alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        aclType,
-				AclId:          aclId,
-			}, runtime)
-	case "udp":
-		_, apiErr = r.client.SetLoadBalancerUDPListenerAttributeWithOptions(
-			&alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        aclType,
-				AclId:          aclId,
-			}, runtime)
-	default:
-		return fmt.Errorf("unsupported protocol: %s, must be one of: http, https, tcp, udp", protocol)
-	}
-
-	return apiErr
 }
 
 // readListenerAcl reads the ACL configuration from the listener attribute API.
@@ -441,4 +362,83 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(listenerId string) er
 	}
 
 	return nil
+}
+
+// setListenerAclAttribute calls the protocol-specific SetLoadBalancerListenerAttribute API.
+// Pass nil for aclType/aclId to omit them from the request (used by delete).
+func (r *slbListenerAclAttachmentResource) setListenerAclAttribute(loadBalancerId, protocol string, listenerPort int64, aclStatus string, aclType *string, aclId *string) error {
+	runtime := &util.RuntimeOptions{}
+	var apiErr error
+
+	switch strings.ToLower(protocol) {
+	case "http":
+		_, apiErr = r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(
+			&alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        aclType,
+				AclId:          aclId,
+			}, runtime)
+	case "https":
+		_, apiErr = r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(
+			&alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        aclType,
+				AclId:          aclId,
+			}, runtime)
+	case "tcp":
+		_, apiErr = r.client.SetLoadBalancerTCPListenerAttributeWithOptions(
+			&alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        aclType,
+				AclId:          aclId,
+			}, runtime)
+	case "udp":
+		_, apiErr = r.client.SetLoadBalancerUDPListenerAttributeWithOptions(
+			&alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+				AclStatus:      tea.String(aclStatus),
+				AclType:        aclType,
+				AclId:          aclId,
+			}, runtime)
+	default:
+		return fmt.Errorf("unsupported protocol: %s, must be one of: http, https, tcp, udp", protocol)
+	}
+
+	return apiErr
+}
+
+// parseListenerId parses "lb-xxx:protocol:port" into (loadBalancerId, protocol, listenerPort).
+func parseListenerId(listenerId string) (loadBalancerId string, protocol string, listenerPort int64, err error) {
+	parts := strings.Split(listenerId, ":")
+	if len(parts) != 3 {
+		err = fmt.Errorf("invalid listener_id format: %q, expected load_balancer_id:protocol:port", listenerId)
+		return
+	}
+	loadBalancerId = parts[0]
+	protocol = parts[1]
+	_, err = fmt.Sscanf(parts[2], "%d", &listenerPort)
+	if err != nil {
+		err = fmt.Errorf("invalid port in listener_id %q: %w", listenerId, err)
+	}
+	return
+}
+
+// isRetryableOrStatusError returns true if the error is retryable (from the global list)
+// or a listener status error (OperationFailed.ListenerStatusNotSupport), which is transient.
+func isRetryableOrStatusError(err error) bool {
+	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
+		code := strings.ToLower(*sdkErr.Code)
+		if code == "operationfailed.listenerstatusnotsupport" {
+			return true
+		}
+		return isAbleToRetry(*sdkErr.Code)
+	}
+	return false
 }
