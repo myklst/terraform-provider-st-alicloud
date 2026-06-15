@@ -510,5 +510,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewUserSSOSettingsResource,
 		NewVervericaMemberResource,
 		NewFoasconsoleNamespaceSpecResource,
+		NewSlbListenerWhitelistAclAttachmentResource,
 	}
 }
