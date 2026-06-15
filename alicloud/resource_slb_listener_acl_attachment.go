@@ -417,22 +417,22 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 	return nil
 }
 
-// deleteAclConfig disables ACL on the listener by setting AclStatus="off".
-// Only sends AclStatus — does NOT send AclType or AclId to avoid corrupting
-// the listener config. Retries on transient status errors.
-// If the listener is already gone, treat as success.
 func (r *slbListenerAclAttachmentResource) deleteAclConfig(listenerId string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
 		return err
 	}
 
+	// deleteAclConfig disables ACL on the listener by setting AclStatus="off".
 	setAcl := func() error {
 		apiErr := r.setListenerAclAttribute(
 			loadBalancerId, protocol, listenerPort,
 			"off", nil, nil,
 		)
+		// If failed to set status, it might due to listener is deleted or
+		// listener is not ready to be perform any action
 		if apiErr != nil {
+			// Check is the listener being deleted
 			if sdkErr, ok := apiErr.(*tea.SDKError); ok && sdkErr.Code != nil {
 				code := *sdkErr.Code
 				if code == "InvalidListener" || code == "NoSuchListener" ||
@@ -448,10 +448,11 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(listenerId string) er
 		return nil
 	}
 
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 2 * time.Minute
-	bo.InitialInterval = 3 * time.Second
-	err = backoff.Retry(setAcl, bo)
+	// Retry backoff
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(setAcl, reconnectBackoff)
+
 	if err != nil {
 		return fmt.Errorf("failed to disable ACL on listener: %w", err)
 	}
