@@ -57,8 +57,8 @@ func parseListenerId(listenerId string) (loadBalancerId string, protocol string,
 
 // isListenerStatusError returns true if the error is a listener-not-ready error.
 func isListenerStatusError(err error) bool {
-	if sdkErr, ok := err.(*tea.SDKError); ok {
-		return sdkErr.Code != nil && *sdkErr.Code == "OperationFailed.ListenerStatusNotSupport"
+	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
+		return strings.ToLower(*sdkErr.Code) == "operationfailed.listenerstatusnotsupport"
 	}
 	return false
 }
@@ -224,6 +224,10 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Give the listener time to settle after creation — the SLB API returns
+	// OperationFailed.ListenerStatusNotSupport if we set ACL too soon.
+	time.Sleep(30 * time.Second)
 
 	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
