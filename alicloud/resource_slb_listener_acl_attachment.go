@@ -39,12 +39,10 @@ type slbListenerAclAttachmentModel struct {
 	AclIds     types.List   `tfsdk:"acl_ids"`
 }
 
-// Metadata returns the SLB Listener ACL Attachment resource name.
 func (r *slbListenerAclAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_slb_listener_acl_attachment"
 }
 
-// Schema defines the schema for the SLB Listener ACL Attachment resource.
 func (r *slbListenerAclAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Attach ACL(s) to an SLB listener and enable access control with white list type.",
@@ -72,7 +70,6 @@ func (r *slbListenerAclAttachmentResource) Schema(_ context.Context, _ resource.
 	}
 }
 
-// Configure adds the provider configured client to the resource.
 func (r *slbListenerAclAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -80,8 +77,9 @@ func (r *slbListenerAclAttachmentResource) Configure(_ context.Context, req reso
 	r.client = req.ProviderData.(alicloudClients).slbClient
 }
 
-// Create attaches ACLs to the SLB listener.
 func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+
+	// Retrieve values from plan
 	var plan *slbListenerAclAttachmentModel
 	getStateDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getStateDiags...)
@@ -89,6 +87,7 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 		return
 	}
 
+	//Turn on ACL whitelist mode on SLB listener and attach the ACL to the listener.
 	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -111,8 +110,8 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 	}
 }
 
-// Read reads the SLB listener ACL attachment state.
 func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Get current state
 	var state *slbListenerAclAttachmentModel
 	getStateDiags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(getStateDiags...)
@@ -560,4 +559,3 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 
 	return nil
 }
-
