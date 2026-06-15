@@ -553,15 +553,5 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 		return fmt.Errorf("failed to disable ACL on listener: %w", err)
 	}
 
-	// Verify the ACL was actually disabled by reading back.
-	aclStatus, _, readErr := r.readListenerAcl(listenerId)
-	if readErr != nil {
-		// Read failure is not fatal for delete — the API call succeeded.
-		return nil
-	}
-	if aclStatus != "off" {
-		return fmt.Errorf("ACL disable verification failed: AclStatus is %q, expected \"off\"", aclStatus)
-	}
-
 	return nil
 }
