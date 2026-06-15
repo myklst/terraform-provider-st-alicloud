@@ -121,7 +121,7 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 
 	listenerId := state.ListenerId.ValueString()
 
-	_, _, aclIds, err := r.readListenerAcl(listenerId)
+	_, aclIds, err := r.readListenerAcl(listenerId)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to read SLB listener ACL attribute.",
@@ -269,14 +269,14 @@ func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error
 }
 
 // readListenerAcl reads the ACL configuration from the listener attribute API.
-// Returns (aclStatus, aclType, aclIds, error).
-func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (string, string, []string, error) {
+// Returns (aclStatus, aclIds, error).
+func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (string, []string, error) {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
-		return "", "", nil, err
+		return "", nil, err
 	}
 
-	var aclStatus, aclType, aclIdStr string
+	var aclStatus, aclIdStr string
 
 	readFn := func() error {
 		runtime := &util.RuntimeOptions{}
@@ -295,7 +295,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 				return backoff.Permanent(err)
 			}
 			aclStatus = tea.StringValue(resp.Body.AclStatus)
-			aclType = tea.StringValue(resp.Body.AclType)
 			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "https":
 			req := &alicloudSlbClient.DescribeLoadBalancerHTTPSListenerAttributeRequest{
@@ -310,7 +309,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 				return backoff.Permanent(err)
 			}
 			aclStatus = tea.StringValue(resp.Body.AclStatus)
-			aclType = tea.StringValue(resp.Body.AclType)
 			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "tcp":
 			req := &alicloudSlbClient.DescribeLoadBalancerTCPListenerAttributeRequest{
@@ -325,7 +323,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 				return backoff.Permanent(err)
 			}
 			aclStatus = tea.StringValue(resp.Body.AclStatus)
-			aclType = tea.StringValue(resp.Body.AclType)
 			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "udp":
 			req := &alicloudSlbClient.DescribeLoadBalancerUDPListenerAttributeRequest{
@@ -340,7 +337,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 				return backoff.Permanent(err)
 			}
 			aclStatus = tea.StringValue(resp.Body.AclStatus)
-			aclType = tea.StringValue(resp.Body.AclType)
 			aclIdStr = tea.StringValue(resp.Body.AclId)
 		default:
 			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s", protocol))
@@ -352,7 +348,7 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	bo.MaxElapsedTime = 30 * time.Second
 	err = backoff.Retry(readFn, bo)
 	if err != nil {
-		return "", "", nil, err
+		return "", nil, err
 	}
 
 	// AclId is comma-separated string, split into list
@@ -360,7 +356,7 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	if aclIdStr != "" {
 		aclIds = strings.Split(aclIdStr, ",")
 	}
-	return aclStatus, aclType, aclIds, nil
+	return aclStatus, aclIds, nil
 }
 
 // setAclConfig sets the ACL configuration on the SLB listener using SetListenerAttribute.
@@ -558,7 +554,7 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 	}
 
 	// Verify the ACL was actually disabled by reading back.
-	aclStatus, _, _, readErr := r.readListenerAcl(listenerId)
+	aclStatus, _, readErr := r.readListenerAcl(listenerId)
 	if readErr != nil {
 		// Read failure is not fatal for delete — the API call succeeded.
 		return nil
