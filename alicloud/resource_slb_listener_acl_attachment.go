@@ -377,72 +377,55 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
+		var apiErr error
 
 		switch strings.ToLower(protocol) {
 		case "http":
-			request := &alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        tea.String(aclType),
-				AclId:          tea.String(aclIds),
-			}
-			_, err := r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String(aclStatus),
+					AclType:        tea.String(aclType),
+					AclId:          tea.String(aclIds),
+				}, runtime)
 		case "https":
-			request := &alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        tea.String(aclType),
-				AclId:          tea.String(aclIds),
-			}
-			_, err := r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String(aclStatus),
+					AclType:        tea.String(aclType),
+					AclId:          tea.String(aclIds),
+				}, runtime)
 		case "tcp":
-			request := &alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        tea.String(aclType),
-				AclId:          tea.String(aclIds),
-			}
-			_, err := r.client.SetLoadBalancerTCPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerTCPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String(aclStatus),
+					AclType:        tea.String(aclType),
+					AclId:          tea.String(aclIds),
+				}, runtime)
 		case "udp":
-			request := &alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String(aclStatus),
-				AclType:        tea.String(aclType),
-				AclId:          tea.String(aclIds),
-			}
-			_, err := r.client.SetLoadBalancerUDPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerUDPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String(aclStatus),
+					AclType:        tea.String(aclType),
+					AclId:          tea.String(aclIds),
+				}, runtime)
 		default:
 			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s, must be one of: http, https, tcp, udp", protocol))
 		}
 
+		if apiErr != nil {
+			if isRetryableOrStatusError(apiErr) {
+				return apiErr
+			}
+			return backoff.Permanent(apiErr)
+		}
 		return nil
 	}
 
@@ -473,76 +456,50 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 	// Sending empty AclType/AclId can corrupt the listener config on the API side.
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
+		var apiErr error
 
 		switch strings.ToLower(protocol) {
 		case "http":
-			request := &alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("off"),
-			}
-			_, err := r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isListenerGoneError(err) {
-					return nil
-				}
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerHTTPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerHTTPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String("off"),
+				}, runtime)
 		case "https":
-			request := &alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("off"),
-			}
-			_, err := r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isListenerGoneError(err) {
-					return nil
-				}
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerHTTPSListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerHTTPSListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String("off"),
+				}, runtime)
 		case "tcp":
-			request := &alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("off"),
-			}
-			_, err := r.client.SetLoadBalancerTCPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isListenerGoneError(err) {
-					return nil
-				}
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerTCPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerTCPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String("off"),
+				}, runtime)
 		case "udp":
-			request := &alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-				AclStatus:      tea.String("off"),
-			}
-			_, err := r.client.SetLoadBalancerUDPListenerAttributeWithOptions(request, runtime)
-			if err != nil {
-				if isListenerGoneError(err) {
-					return nil
-				}
-				if isRetryableOrStatusError(err) {
-					return err
-				}
-				return backoff.Permanent(err)
-			}
+			_, apiErr = r.client.SetLoadBalancerUDPListenerAttributeWithOptions(
+				&alicloudSlbClient.SetLoadBalancerUDPListenerAttributeRequest{
+					LoadBalancerId: tea.String(loadBalancerId),
+					ListenerPort:   tea.Int32(int32(listenerPort)),
+					AclStatus:      tea.String("off"),
+				}, runtime)
 		default:
 			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s, must be one of: http, https, tcp, udp", protocol))
 		}
 
+		if apiErr != nil {
+			if isListenerGoneError(apiErr) {
+				return nil
+			}
+			if isRetryableOrStatusError(apiErr) {
+				return apiErr
+			}
+			return backoff.Permanent(apiErr)
+		}
 		return nil
 	}
 
