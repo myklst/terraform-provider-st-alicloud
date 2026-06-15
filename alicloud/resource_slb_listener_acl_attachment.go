@@ -221,16 +221,6 @@ func isRetryableOrStatusError(err error) bool {
 	return false
 }
 
-// aclIdsFromList converts a types.List of strings to a []string using ElementsAs.
-func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error) {
-	var result []string
-	diags := aclIdsList.ElementsAs(ctx, &result, false)
-	if diags.HasError() {
-		return nil, fmt.Errorf("failed to convert acl_ids list: %v", diags)
-	}
-	return result, nil
-}
-
 // describeListenerAcl calls the protocol-specific DescribeLoadBalancerListenerAttribute API.
 // Returns (aclStatus, aclId, error). aclId is comma-separated if multiple.
 func (r *slbListenerAclAttachmentResource) describeListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, error) {
@@ -378,9 +368,10 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 		return err
 	}
 
-	aclIdStrs, err := aclIdsFromList(ctx, aclIdsList)
-	if err != nil {
-		return err
+	var aclIdStrs []string
+	diags := aclIdsList.ElementsAs(ctx, &aclIdStrs, false)
+	if diags.HasError() {
+		return fmt.Errorf("failed to convert acl_ids list: %v", diags)
 	}
 	aclIds := strings.Join(aclIdStrs, ",")
 
