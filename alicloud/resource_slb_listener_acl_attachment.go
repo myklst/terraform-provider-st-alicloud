@@ -208,21 +208,14 @@ func parseListenerId(listenerId string) (loadBalancerId string, protocol string,
 	return
 }
 
-// isListenerStatusError returns true if the error is a listener-not-ready error.
-func isListenerStatusError(err error) bool {
-	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
-		return strings.ToLower(*sdkErr.Code) == "operationfailed.listenerstatusnotsupport"
-	}
-	return false
-}
-
 // isRetryableOrStatusError returns true if the error is retryable (from the global list)
-// or is a listener status error (which is transient and should be retried).
+// or a listener status error (OperationFailed.ListenerStatusNotSupport), which is transient.
 func isRetryableOrStatusError(err error) bool {
-	if isListenerStatusError(err) {
-		return true
-	}
 	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
+		code := strings.ToLower(*sdkErr.Code)
+		if code == "operationfailed.listenerstatusnotsupport" {
+			return true
+		}
 		return isAbleToRetry(*sdkErr.Code)
 	}
 	return false
