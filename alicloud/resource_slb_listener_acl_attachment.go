@@ -225,10 +225,6 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 		return
 	}
 
-	// Give the listener time to settle after creation — the SLB API returns
-	// OperationFailed.ListenerStatusNotSupport if we set ACL too soon.
-	time.Sleep(30 * time.Second)
-
 	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -450,9 +446,11 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 		return nil
 	}
 
+	// Retry with longer initial interval — the listener may still be
+	// transitioning after creation, causing ListenerStatusNotSupport.
 	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 3 * time.Minute
-	bo.InitialInterval = 5 * time.Second
+	bo.MaxElapsedTime = 5 * time.Minute
+	bo.InitialInterval = 15 * time.Second
 	err = backoff.Retry(setAcl, bo)
 	if err != nil {
 		return fmt.Errorf("failed to set ACL on listener: %w", err)
