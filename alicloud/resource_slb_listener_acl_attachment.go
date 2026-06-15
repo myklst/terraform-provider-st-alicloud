@@ -75,14 +75,6 @@ func isRetryableOrStatusError(err error) bool {
 	return false
 }
 
-// stringVal safely dereferences a *string pointer, returning "" for nil.
-func stringVal(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 // aclIdsFromList converts a types.List of strings to a []string using ElementsAs.
 func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error) {
 	var result []string
@@ -114,9 +106,9 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 				}
 				return backoff.Permanent(err)
 			}
-			aclStatus = stringVal(resp.Body.AclStatus)
-			aclType = stringVal(resp.Body.AclType)
-			aclIdStr = stringVal(resp.Body.AclId)
+			aclStatus = tea.StringValue(resp.Body.AclStatus)
+			aclType = tea.StringValue(resp.Body.AclType)
+			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "https":
 			req := &alicloudSlbClient.DescribeLoadBalancerHTTPSListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
@@ -129,9 +121,9 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 				}
 				return backoff.Permanent(err)
 			}
-			aclStatus = stringVal(resp.Body.AclStatus)
-			aclType = stringVal(resp.Body.AclType)
-			aclIdStr = stringVal(resp.Body.AclId)
+			aclStatus = tea.StringValue(resp.Body.AclStatus)
+			aclType = tea.StringValue(resp.Body.AclType)
+			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "tcp":
 			req := &alicloudSlbClient.DescribeLoadBalancerTCPListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
@@ -144,9 +136,9 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 				}
 				return backoff.Permanent(err)
 			}
-			aclStatus = stringVal(resp.Body.AclStatus)
-			aclType = stringVal(resp.Body.AclType)
-			aclIdStr = stringVal(resp.Body.AclId)
+			aclStatus = tea.StringValue(resp.Body.AclStatus)
+			aclType = tea.StringValue(resp.Body.AclType)
+			aclIdStr = tea.StringValue(resp.Body.AclId)
 		case "udp":
 			req := &alicloudSlbClient.DescribeLoadBalancerUDPListenerAttributeRequest{
 				LoadBalancerId: tea.String(loadBalancerId),
@@ -159,9 +151,9 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 				}
 				return backoff.Permanent(err)
 			}
-			aclStatus = stringVal(resp.Body.AclStatus)
-			aclType = stringVal(resp.Body.AclType)
-			aclIdStr = stringVal(resp.Body.AclId)
+			aclStatus = tea.StringValue(resp.Body.AclStatus)
+			aclType = tea.StringValue(resp.Body.AclType)
+			aclIdStr = tea.StringValue(resp.Body.AclId)
 		default:
 			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s", protocol))
 		}
