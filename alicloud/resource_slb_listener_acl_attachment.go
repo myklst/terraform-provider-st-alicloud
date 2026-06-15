@@ -192,58 +192,7 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
-// describeListenerAcl calls the protocol-specific DescribeLoadBalancerListenerAttribute API.
-// Returns (aclStatus, aclId, error). aclId is comma-separated if multiple.
-func (r *slbListenerAclAttachmentResource) describeListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, error) {
-	runtime := &util.RuntimeOptions{}
-
-	switch strings.ToLower(protocol) {
-	case "http":
-		resp, err := r.client.DescribeLoadBalancerHTTPListenerAttributeWithOptions(
-			&alicloudSlbClient.DescribeLoadBalancerHTTPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}, runtime)
-		if err != nil {
-			return "", "", err
-		}
-		return tea.StringValue(resp.Body.AclStatus), tea.StringValue(resp.Body.AclId), nil
-	case "https":
-		resp, err := r.client.DescribeLoadBalancerHTTPSListenerAttributeWithOptions(
-			&alicloudSlbClient.DescribeLoadBalancerHTTPSListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}, runtime)
-		if err != nil {
-			return "", "", err
-		}
-		return tea.StringValue(resp.Body.AclStatus), tea.StringValue(resp.Body.AclId), nil
-	case "tcp":
-		resp, err := r.client.DescribeLoadBalancerTCPListenerAttributeWithOptions(
-			&alicloudSlbClient.DescribeLoadBalancerTCPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}, runtime)
-		if err != nil {
-			return "", "", err
-		}
-		return tea.StringValue(resp.Body.AclStatus), tea.StringValue(resp.Body.AclId), nil
-	case "udp":
-		resp, err := r.client.DescribeLoadBalancerUDPListenerAttributeWithOptions(
-			&alicloudSlbClient.DescribeLoadBalancerUDPListenerAttributeRequest{
-				LoadBalancerId: tea.String(loadBalancerId),
-				ListenerPort:   tea.Int32(int32(listenerPort)),
-			}, runtime)
-		if err != nil {
-			return "", "", err
-		}
-		return tea.StringValue(resp.Body.AclStatus), tea.StringValue(resp.Body.AclId), nil
-	default:
-		return "", "", fmt.Errorf("unsupported protocol: %s", protocol)
-	}
-}
-
-// readListenerAcl reads the ACL configuration from the listener attribute API.
+// readListenerAcl reads the ACL configuration using DescribeLoadBalancerListeners.
 // Returns (aclStatus, aclIds, error). Retries on transient errors.
 func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (string, []string, error) {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
@@ -254,22 +203,33 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	var aclStatus, aclIdStr string
 
 	readFn := func() error {
-		status, aclId, apiErr := r.describeListenerAcl(loadBalancerId, protocol, listenerPort)
+		resp, apiErr := r.client.DescribeLoadBalancerListenersWithOptions(
+			&alicloudSlbClient.DescribeLoadBalancerListenersRequest{
+				LoadBalancerId:   []*string{tea.String(loadBalancerId)},
+				ListenerProtocol: tea.String(protocol),
+			}, &util.RuntimeOptions{})
 		if apiErr != nil {
 			if _t, ok := apiErr.(*tea.SDKError); ok && isAbleToRetry(*_t.Code) {
 				return apiErr
 			}
 			return backoff.Permanent(apiErr)
 		}
-		aclStatus = status
-		aclIdStr = aclId
+		if resp == nil || resp.Body == nil || resp.Body.Listeners == nil {
+			return nil
+		}
+		for _, l := range resp.Body.Listeners {
+			if tea.Int32Value(l.ListenerPort) == int32(listenerPort) {
+				aclStatus = tea.StringValue(l.AclStatus)
+				aclIdStr = tea.StringValue(l.AclId)
+				break
+			}
+		}
 		return nil
 	}
 
-	// Retry backoff
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(readFn, reconnectBackoff)
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(readFn, bo)
 	if err != nil {
 		return "", nil, err
 	}
