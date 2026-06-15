@@ -192,8 +192,6 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
-// --- Helpers ---
-
 // parseListenerId parses "lb-xxx:protocol:port" into (loadBalancerId, protocol, listenerPort).
 func parseListenerId(listenerId string) (loadBalancerId string, protocol string, listenerPort int64, err error) {
 	parts := strings.Split(listenerId, ":")
@@ -364,9 +362,10 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 		return nil
 	}
 
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(readFn, bo)
+		// Retry backoff
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(readFn, reconnectBackoff)
 	if err != nil {
 		return "", nil, err
 	}
@@ -406,10 +405,10 @@ func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, lis
 		return nil
 	}
 
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 5 * time.Minute
-	bo.InitialInterval = 15 * time.Second
-	err = backoff.Retry(setAcl, bo)
+	// Retry backoff
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	err = backoff.Retry(setAcl, reconnectBackoff)
 	if err != nil {
 		return fmt.Errorf("failed to set ACL on listener: %w", err)
 	}
