@@ -156,8 +156,8 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 	}
 }
 
-// Update updates the SLB listener ACL attachment.
 func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Retrieve values from plan
 	var plan *slbListenerAclAttachmentModel
 	getPlanDiags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPlanDiags...)
@@ -187,7 +187,6 @@ func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resou
 	}
 }
 
-// Delete removes the ACL attachment by turning off access control via SetListenerAttribute.
 func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state *slbListenerAclAttachmentModel
 	diags := req.State.Get(ctx, &state)
@@ -196,6 +195,7 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
+	// Delete removes the ACL attachment by turning off access control via SetListenerAttribute.
 	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
