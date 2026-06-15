@@ -256,9 +256,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	return aclStatus, aclIds, nil
 }
 
-// setListenerAclAttribute sets the ACL configuration on a listener via the protocol-specific API.
-// Pass nil for aclType/aclId to omit them (used by delete). Retries on transient errors.
-// If ignoreListenerGone is true, listener-not-found errors are silently swallowed (used by delete).
 func (r *slbListenerAclAttachmentResource) setListenerAclAttribute(listenerId string, aclStatus string, aclType *string, aclId *string, ignoreListenerGone bool) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
@@ -326,9 +323,9 @@ func (r *slbListenerAclAttachmentResource) setListenerAclAttribute(listenerId st
 		return nil
 	}
 
-	bo := backoff.NewExponentialBackOff()
-	bo.MaxElapsedTime = 30 * time.Second
-	if err = backoff.Retry(fn, bo); err != nil {
+	reconnectBackoff := backoff.NewExponentialBackOff()
+	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	if err = backoff.Retry(fn, reconnectBackoff); err != nil {
 		if aclStatus == "off" {
 			return fmt.Errorf("failed to disable ACL on listener: %w", err)
 		}
