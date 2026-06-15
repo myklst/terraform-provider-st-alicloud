@@ -39,6 +39,49 @@ type slbListenerAclAttachmentModel struct {
 	AclIds     types.List   `tfsdk:"acl_ids"`
 }
 
+// Metadata returns the SLB Listener ACL Attachment resource name.
+func (r *slbListenerAclAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_slb_listener_acl_attachment"
+}
+
+// Schema defines the schema for the SLB Listener ACL Attachment resource.
+func (r *slbListenerAclAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Attach ACL(s) to an SLB listener and enable access control with white list type.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Description: "Same as listener_id.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"listener_id": schema.StringAttribute{
+				Description: "The listener ID in the format load_balancer_id:protocol:port (e.g. lb-xxx:tcp:80).",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"acl_ids": schema.ListAttribute{
+				Description: "List of ACL IDs to attach to the listener.",
+				ElementType: types.StringType,
+				Required:    true,
+			},
+		},
+	}
+}
+
+// Configure adds the provider configured client to the resource.
+func (r *slbListenerAclAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	r.client = req.ProviderData.(alicloudClients).slbClient
+}
+
+// --- Helper functions ---
+
 // parseListenerId parses "lb-xxx:protocol:port" into (loadBalancerId, protocol, listenerPort).
 func parseListenerId(listenerId string) (loadBalancerId string, protocol string, listenerPort int64, err error) {
 	parts := strings.Split(listenerId, ":")
@@ -71,6 +114,16 @@ func isRetryableOrStatusError(err error) bool {
 	}
 	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
 		return isAbleToRetry(*sdkErr.Code)
+	}
+	return false
+}
+
+// isListenerGoneError returns true if the error indicates the listener no longer exists.
+func isListenerGoneError(err error) bool {
+	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
+		code := *sdkErr.Code
+		return code == "InvalidListener" || code == "NoSuchListener" ||
+			code == "InvalidLoadBalancerId.NotFound" || code == "ResourceNotFound"
 	}
 	return false
 }
@@ -173,47 +226,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 		aclIds = strings.Split(aclIdStr, ",")
 	}
 	return aclStatus, aclType, aclIds, nil
-}
-
-// Metadata returns the SLB Listener ACL Attachment resource name.
-func (r *slbListenerAclAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_slb_listener_acl_attachment"
-}
-
-// Schema defines the schema for the SLB Listener ACL Attachment resource.
-func (r *slbListenerAclAttachmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{
-		Description: "Attach ACL(s) to an SLB listener and enable access control with white list type.",
-		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{
-				Description: "Same as listener_id.",
-				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"listener_id": schema.StringAttribute{
-				Description: "The listener ID in the format load_balancer_id:protocol:port (e.g. lb-xxx:tcp:80).",
-				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"acl_ids": schema.ListAttribute{
-				Description: "List of ACL IDs to attach to the listener.",
-				ElementType: types.StringType,
-				Required:    true,
-			},
-		},
-	}
-}
-
-// Configure adds the provider configured client to the resource.
-func (r *slbListenerAclAttachmentResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	r.client = req.ProviderData.(alicloudClients).slbClient
 }
 
 // Create attaches ACLs to the SLB listener.
@@ -549,13 +561,3 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(ctx context.Context, 
 	return nil
 }
 
-// isListenerGoneError returns true if the error indicates the listener no longer exists.
-func isListenerGoneError(err error) bool {
-	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
-		code := *sdkErr.Code
-		// Listener not found or SLB not found
-		return code == "InvalidListener" || code == "NoSuchListener" ||
-			code == "InvalidLoadBalancerId.NotFound" || code == "ResourceNotFound"
-	}
-	return false
-}
