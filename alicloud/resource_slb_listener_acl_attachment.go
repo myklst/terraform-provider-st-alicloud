@@ -75,6 +75,16 @@ func isRetryableOrStatusError(err error) bool {
 	return false
 }
 
+// aclIdsFromList converts a types.List of strings to a []string using ElementsAs.
+func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error) {
+	var result []string
+	diags := aclIdsList.ElementsAs(ctx, &result, false)
+	if diags.HasError() {
+		return nil, fmt.Errorf("failed to convert acl_ids list: %v", diags)
+	}
+	return result, nil
+}
+
 // waitForListenerReady polls the listener attribute until its Status is "running".
 func (r *slbListenerAclAttachmentResource) waitForListenerReady(loadBalancerId, protocol string, listenerPort int64) error {
 	checkReady := func() error {
@@ -145,6 +155,96 @@ func (r *slbListenerAclAttachmentResource) waitForListenerReady(loadBalancerId, 
 	return backoff.Retry(checkReady, bo)
 }
 
+// readListenerAcl reads the ACL configuration from the listener attribute API.
+// Returns (aclStatus, aclType, aclIds, error).
+func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, protocol string, listenerPort int64) (string, string, []string, error) {
+	var aclStatus, aclType, aclIdStr string
+
+	readFn := func() error {
+		runtime := &util.RuntimeOptions{}
+
+		switch strings.ToLower(protocol) {
+		case "http":
+			req := &alicloudSlbClient.DescribeLoadBalancerHTTPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+			}
+			resp, err := r.client.DescribeLoadBalancerHTTPListenerAttributeWithOptions(req, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok && isAbleToRetry(*_t.Code) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			aclStatus = tea.ToString(resp.Body.AclStatus)
+			aclType = tea.ToString(resp.Body.AclType)
+			aclIdStr = tea.ToString(resp.Body.AclId)
+		case "https":
+			req := &alicloudSlbClient.DescribeLoadBalancerHTTPSListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+			}
+			resp, err := r.client.DescribeLoadBalancerHTTPSListenerAttributeWithOptions(req, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok && isAbleToRetry(*_t.Code) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			aclStatus = tea.ToString(resp.Body.AclStatus)
+			aclType = tea.ToString(resp.Body.AclType)
+			aclIdStr = tea.ToString(resp.Body.AclId)
+		case "tcp":
+			req := &alicloudSlbClient.DescribeLoadBalancerTCPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+			}
+			resp, err := r.client.DescribeLoadBalancerTCPListenerAttributeWithOptions(req, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok && isAbleToRetry(*_t.Code) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			aclStatus = tea.ToString(resp.Body.AclStatus)
+			aclType = tea.ToString(resp.Body.AclType)
+			aclIdStr = tea.ToString(resp.Body.AclId)
+		case "udp":
+			req := &alicloudSlbClient.DescribeLoadBalancerUDPListenerAttributeRequest{
+				LoadBalancerId: tea.String(loadBalancerId),
+				ListenerPort:   tea.Int32(int32(listenerPort)),
+			}
+			resp, err := r.client.DescribeLoadBalancerUDPListenerAttributeWithOptions(req, runtime)
+			if err != nil {
+				if _t, ok := err.(*tea.SDKError); ok && isAbleToRetry(*_t.Code) {
+					return err
+				}
+				return backoff.Permanent(err)
+			}
+			aclStatus = tea.ToString(resp.Body.AclStatus)
+			aclType = tea.ToString(resp.Body.AclType)
+			aclIdStr = tea.ToString(resp.Body.AclId)
+		default:
+			return backoff.Permanent(fmt.Errorf("unsupported protocol: %s", protocol))
+		}
+		return nil
+	}
+
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = 30 * time.Second
+	err := backoff.Retry(readFn, bo)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	// AclId is comma-separated string, split into list
+	var aclIds []string
+	if aclIdStr != "" {
+		aclIds = strings.Split(aclIdStr, ",")
+	}
+	return aclStatus, aclType, aclIds, nil
+}
+
 // Metadata returns the SLB Listener ACL Attachment resource name.
 func (r *slbListenerAclAttachmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_slb_listener_acl_attachment"
@@ -195,7 +295,7 @@ func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
+	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to attach ACL to SLB listener.",
@@ -233,40 +333,7 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 		return
 	}
 
-	var aclStatus string
-	var sourceItems string
-
-	readAcl := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		request := &alicloudSlbClient.DescribeListenerAccessControlAttributeRequest{
-			LoadBalancerId:   tea.String(loadBalancerId),
-			ListenerPort:     tea.Int32(int32(listenerPort)),
-			ListenerProtocol: tea.String(protocol),
-		}
-
-		response, err := r.client.DescribeListenerAccessControlAttributeWithOptions(request, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-
-		aclStatus = tea.ToString(response.Body.AccessControlStatus)
-		sourceItems = tea.ToString(response.Body.SourceItems)
-
-		return nil
-	}
-
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(readAcl, reconnectBackoff)
+	aclStatus, _, aclIds, err := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to read SLB listener ACL attribute.",
@@ -276,15 +343,9 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 	}
 
 	// If ACL is off, the attachment is effectively gone
-	if aclStatus == "off" || aclStatus == "" {
+	if aclStatus != "on" {
 		resp.State.RemoveResource(ctx)
 		return
-	}
-
-	// Parse acl_ids from SourceItems (comma-separated string)
-	var aclIds []string
-	if sourceItems != "" {
-		aclIds = strings.Split(sourceItems, ",")
 	}
 
 	aclIdsValue, diags := types.ListValueFrom(ctx, types.StringType, aclIds)
@@ -315,7 +376,7 @@ func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
+	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to update SLB listener ACL attachment.",
@@ -353,7 +414,7 @@ func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resou
 		return
 	}
 
-	err := r.setAclConfig(state.ListenerId.ValueString(), emptyAclIds, "off", "")
+	err := r.setAclConfig(ctx, state.ListenerId.ValueString(), emptyAclIds, "off", "")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to disable SLB listener access control.",
@@ -371,24 +432,24 @@ func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req 
 // setAclConfig sets the ACL configuration on the SLB listener using SetListenerAttribute.
 // First waits for the listener to be in "running" status, then applies the ACL config.
 // Retries on OperationFailed.ListenerStatusNotSupport since that's a transient error.
-func (r *slbListenerAclAttachmentResource) setAclConfig(listenerId string, aclIdsList types.List, aclStatus string, aclType string) error {
+func (r *slbListenerAclAttachmentResource) setAclConfig(ctx context.Context, listenerId string, aclIdsList types.List, aclStatus string, aclType string) error {
 	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
 	if err != nil {
 		return err
 	}
+
+	// Convert acl_ids list to comma-separated string using ElementsAs
+	aclIdStrs, err := aclIdsFromList(ctx, aclIdsList)
+	if err != nil {
+		return err
+	}
+	aclIds := strings.Join(aclIdStrs, ",")
 
 	// Wait for listener to be ready before setting ACL
 	err = r.waitForListenerReady(loadBalancerId, protocol, listenerPort)
 	if err != nil {
 		return fmt.Errorf("listener not ready: %w", err)
 	}
-
-	// Convert acl_ids list to comma-separated string
-	var aclIdStrs []string
-	for _, id := range aclIdsList.Elements() {
-		aclIdStrs = append(aclIdStrs, trimStringQuotes(id.String()))
-	}
-	aclIds := strings.Join(aclIdStrs, ",")
 
 	setAcl := func() error {
 		runtime := &util.RuntimeOptions{}
