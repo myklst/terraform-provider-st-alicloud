@@ -80,6 +80,142 @@ func (r *slbListenerAclAttachmentResource) Configure(_ context.Context, req reso
 	r.client = req.ProviderData.(alicloudClients).slbClient
 }
 
+// Create attaches ACLs to the SLB listener.
+func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan *slbListenerAclAttachmentModel
+	getStateDiags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(getStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to attach ACL to SLB listener.",
+			err.Error(),
+		)
+		return
+	}
+
+	state := &slbListenerAclAttachmentModel{
+		Id:         plan.ListenerId,
+		ListenerId: plan.ListenerId,
+		AclIds:     plan.AclIds,
+	}
+
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+// Read reads the SLB listener ACL attachment state.
+func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state *slbListenerAclAttachmentModel
+	getStateDiags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(getStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	listenerId := state.ListenerId.ValueString()
+	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid listener_id", err.Error())
+		return
+	}
+
+	_, _, aclIds, err := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to read SLB listener ACL attribute.",
+			err.Error(),
+		)
+		return
+	}
+
+	// If no ACL IDs attached, the attachment is gone
+	if len(aclIds) == 0 {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	aclIdsValue, diags := types.ListValueFrom(ctx, types.StringType, aclIds)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state = &slbListenerAclAttachmentModel{
+		Id:         types.StringValue(listenerId),
+		ListenerId: types.StringValue(listenerId),
+		AclIds:     aclIdsValue,
+	}
+
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+// Update updates the SLB listener ACL attachment.
+func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan *slbListenerAclAttachmentModel
+	getPlanDiags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(getPlanDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to update SLB listener ACL attachment.",
+			err.Error(),
+		)
+		return
+	}
+
+	state := &slbListenerAclAttachmentModel{
+		Id:         plan.ListenerId,
+		ListenerId: plan.ListenerId,
+		AclIds:     plan.AclIds,
+	}
+
+	setStateDiags := resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(setStateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+// Delete removes the ACL attachment by turning off access control via SetListenerAttribute.
+func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state *slbListenerAclAttachmentModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"[API ERROR] Failed to disable SLB listener access control.",
+			err.Error(),
+		)
+		return
+	}
+}
+
+// ImportState imports an existing SLB listener ACL attachment.
+func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
+}
+
 // --- Helper functions ---
 
 // parseListenerId parses "lb-xxx:protocol:port" into (loadBalancerId, protocol, listenerPort).
@@ -226,142 +362,6 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(loadBalancerId, proto
 		aclIds = strings.Split(aclIdStr, ",")
 	}
 	return aclStatus, aclType, aclIds, nil
-}
-
-// Create attaches ACLs to the SLB listener.
-func (r *slbListenerAclAttachmentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan *slbListenerAclAttachmentModel
-	getStateDiags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(getStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to attach ACL to SLB listener.",
-			err.Error(),
-		)
-		return
-	}
-
-	state := &slbListenerAclAttachmentModel{
-		Id:         plan.ListenerId,
-		ListenerId: plan.ListenerId,
-		AclIds:     plan.AclIds,
-	}
-
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-}
-
-// Read reads the SLB listener ACL attachment state.
-func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state *slbListenerAclAttachmentModel
-	getStateDiags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(getStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	listenerId := state.ListenerId.ValueString()
-	loadBalancerId, protocol, listenerPort, err := parseListenerId(listenerId)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid listener_id", err.Error())
-		return
-	}
-
-	_, _, aclIds, err := r.readListenerAcl(loadBalancerId, protocol, listenerPort)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to read SLB listener ACL attribute.",
-			err.Error(),
-		)
-		return
-	}
-
-	// If no ACL IDs attached, the attachment is gone
-	if len(aclIds) == 0 {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
-	aclIdsValue, diags := types.ListValueFrom(ctx, types.StringType, aclIds)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	state = &slbListenerAclAttachmentModel{
-		Id:         types.StringValue(listenerId),
-		ListenerId: types.StringValue(listenerId),
-		AclIds:     aclIdsValue,
-	}
-
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-}
-
-// Update updates the SLB listener ACL attachment.
-func (r *slbListenerAclAttachmentResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan *slbListenerAclAttachmentModel
-	getPlanDiags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(getPlanDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err := r.setAclConfig(ctx, plan.ListenerId.ValueString(), plan.AclIds, "on", "white")
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to update SLB listener ACL attachment.",
-			err.Error(),
-		)
-		return
-	}
-
-	state := &slbListenerAclAttachmentModel{
-		Id:         plan.ListenerId,
-		ListenerId: plan.ListenerId,
-		AclIds:     plan.AclIds,
-	}
-
-	setStateDiags := resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(setStateDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-}
-
-// Delete removes the ACL attachment by turning off access control via SetListenerAttribute.
-func (r *slbListenerAclAttachmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state *slbListenerAclAttachmentModel
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err := r.deleteAclConfig(ctx, state.ListenerId.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to disable SLB listener access control.",
-			err.Error(),
-		)
-		return
-	}
-}
-
-// ImportState imports an existing SLB listener ACL attachment.
-func (r *slbListenerAclAttachmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("listener_id"), req, resp)
 }
 
 // setAclConfig sets the ACL configuration on the SLB listener using SetListenerAttribute.
