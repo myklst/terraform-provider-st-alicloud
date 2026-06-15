@@ -130,9 +130,9 @@ func (r *slbListenerAclAttachmentResource) Read(ctx context.Context, req resourc
 		return
 	}
 
-	// The resource exists if ACL is enabled OR if ACL IDs are still attached.
-	// AclStatus may be empty/nil when ACL IDs are present (API inconsistency).
-	if aclStatus != "on" && len(aclIds) == 0 {
+	// If ACL is off, the attachment resource is gone —
+	// even if AclId still has values, they're not active.
+	if aclStatus != "on" {
 		resp.State.RemoveResource(ctx)
 		return
 	}
