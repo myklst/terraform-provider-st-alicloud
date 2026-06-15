@@ -230,16 +230,6 @@ func isRetryableOrStatusError(err error) bool {
 	return false
 }
 
-// isListenerGoneError returns true if the error indicates the listener no longer exists.
-func isListenerGoneError(err error) bool {
-	if sdkErr, ok := err.(*tea.SDKError); ok && sdkErr.Code != nil {
-		code := *sdkErr.Code
-		return code == "InvalidListener" || code == "NoSuchListener" ||
-			code == "InvalidLoadBalancerId.NotFound" || code == "ResourceNotFound"
-	}
-	return false
-}
-
 // aclIdsFromList converts a types.List of strings to a []string using ElementsAs.
 func aclIdsFromList(ctx context.Context, aclIdsList types.List) ([]string, error) {
 	var result []string
@@ -443,8 +433,12 @@ func (r *slbListenerAclAttachmentResource) deleteAclConfig(listenerId string) er
 			"off", nil, nil,
 		)
 		if apiErr != nil {
-			if isListenerGoneError(apiErr) {
-				return nil
+			if sdkErr, ok := apiErr.(*tea.SDKError); ok && sdkErr.Code != nil {
+				code := *sdkErr.Code
+				if code == "InvalidListener" || code == "NoSuchListener" ||
+					code == "InvalidLoadBalancerId.NotFound" || code == "ResourceNotFound" {
+					return nil
+				}
 			}
 			if isRetryableOrStatusError(apiErr) {
 				return apiErr
