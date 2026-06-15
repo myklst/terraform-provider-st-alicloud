@@ -205,6 +205,7 @@ func (r *slbListenerAclAttachmentResource) readListenerAcl(listenerId string) (s
 	readFn := func() error {
 		resp, apiErr := r.client.DescribeLoadBalancerListenersWithOptions(
 			&alicloudSlbClient.DescribeLoadBalancerListenersRequest{
+				RegionId:         r.client.RegionId,
 				LoadBalancerId:   []*string{tea.String(loadBalancerId)},
 				ListenerProtocol: tea.String(protocol),
 			}, &util.RuntimeOptions{})
