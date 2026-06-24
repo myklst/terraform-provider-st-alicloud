@@ -6,14 +6,14 @@ This Terraform custom provider is designed for own use case scenario.
 Supported Versions
 ------------------
 
-| Terraform version | minimum provider version |maxmimum provider version
+| Terraform version | minimum provider version | maxmimum provider version
 | ---- | ---- | ----|
-| >= 1.3.x	| 0.1.1	| latest |
+| >= 1.13.x	| 0.1.1	| latest |
 
 Requirements
 ------------
 
--	[Terraform](https://www.terraform.io/downloads.html) 1.3.x
+-	[Terraform](https://www.terraform.io/downloads.html) 1.13.x
 -	[Go](https://golang.org/doc/install) 1.24 (to build the provider plugin)
 
 Local Installation
@@ -122,6 +122,11 @@ scenario. The reason behind every resources and data sources are stated as below
 
   This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
   does not provide the option to create auto scaling rules for nodes. (Note: Only task nodes are eligible for auto scaling)
+
+- **st-alicloud_emr_node_group**
+
+  This resource is designed to create node groups for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
+  do not fulfill in place update requirements when node_groups attribute used for_each.
 
 - **st-alicloud_ess_clb_default_server_group_attachment**
 

@@ -21,7 +21,7 @@ import (
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
 	alicloudEcdClient "github.com/alibabacloud-go/ecd-20200930/v5/client"
-	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
+	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/v3/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
 	alicloudImsClient "github.com/alibabacloud-go/ims-20190815/v4/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"

@@ -3,10 +3,12 @@ package alicloud
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // Convert the result for an array and returns a Json string
@@ -39,6 +41,19 @@ func convertJsonStringToListString(configured string) ([]string, error) {
 
 func trimStringQuotes(input string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(input, "\""), "\"")
+}
+
+// getTimeout parses a configured timeout string (e.g. "30m") and falls back
+// to defaultTimeout when the value is null, unknown, empty, or invalid.
+func getTimeout(value types.String, defaultTimeout time.Duration) time.Duration {
+	if value.IsNull() || value.IsUnknown() || value.ValueString() == "" {
+		return defaultTimeout
+	}
+	duration, err := time.ParseDuration(value.ValueString())
+	if err != nil {
+		return defaultTimeout
+	}
+	return duration
 }
 
 func initNewClient(providerConfig *alicloudOpenapiClient.Client, planConfig *clientConfig) (initClient bool, clientConfig *alicloudOpenapiClient.Config, diag diag.Diagnostics) {

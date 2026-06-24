@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
+	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/v3/client"
 )
 
 var (
@@ -72,7 +72,7 @@ func (r *emrMetricAutoScalingRulesResource) Schema(_ context.Context, _ resource
 			},
 			"node_group_id": schema.StringAttribute{
 				Description: "Alicloud E-MapReduce cluster task node group ID.",
-				Computed:    true,
+				Required:    true,
 			},
 			"max_nodes": schema.Int64Attribute{
 				Description: "Maximum capacity of scaling for nodes.",
@@ -177,26 +177,15 @@ func (r *emrMetricAutoScalingRulesResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	nodeGroupId, err := r.getNodeGroup(plan)
-	if err != nil {
+	err := r.putRule(plan); if err != nil {
 		resp.Diagnostics.AddError(
-			"[ERROR] Failed to get node group",
-			err.Error(),
-		)
-		return
-	}
-
-	err = r.putRule(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[ERROR] Failed to create auto scaling rule",
+			"[ERROR] Failed to create auto scaling rule.",
 			err.Error(),
 		)
 		return
 	}
 
 	state = plan
-	state.NodeGroupId = types.StringValue(nodeGroupId)
 
 	// Set state to fully populated data
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -308,17 +297,7 @@ func (r *emrMetricAutoScalingRulesResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	nodeGroupId, err := r.getNodeGroup(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[ERROR] Failed to get node group",
-			err.Error(),
-		)
-		return
-	}
-
-	err = r.putRule(plan)
-	if err != nil {
+	err := r.putRule(plan); if err != nil {
 		resp.Diagnostics.AddError(
 			"[ERROR] Failed to update auto scaling rules.",
 			err.Error(),
@@ -327,7 +306,6 @@ func (r *emrMetricAutoScalingRulesResource) Update(ctx context.Context, req reso
 	}
 
 	state = plan
-	state.NodeGroupId = types.StringValue(nodeGroupId)
 
 	// Set state to fully populated data
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -383,47 +361,8 @@ func (r *emrMetricAutoScalingRulesResource) Delete(ctx context.Context, req reso
 	}
 }
 
-func (r *emrMetricAutoScalingRulesResource) getNodeGroup(plan *emrMetricAutoScalingRulesModel) (string, error) {
-	var nodeGroup *alicloudEmrClient.ListNodeGroupsResponse
-	var err error
-
-	listNodeGroup := func() error {
-		runtime := &util.RuntimeOptions{}
-
-		listNodeGroupsRequest := &alicloudEmrClient.ListNodeGroupsRequest{
-			RegionId:       r.client.RegionId,
-			ClusterId:      tea.String(plan.ClusterId.ValueString()),
-			NodeGroupTypes: []*string{tea.String("TASK")},
-		}
-
-		nodeGroup, err = r.client.ListNodeGroupsWithOptions(listNodeGroupsRequest, runtime)
-		if err != nil {
-			if _t, ok := err.(*tea.SDKError); ok {
-				if isAbleToRetry(*_t.Code) {
-					return err
-				} else {
-					return backoff.Permanent(err)
-				}
-			} else {
-				return err
-			}
-		}
-		return nil
-	}
-	// Retry backoff
-	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
-	err = backoff.Retry(listNodeGroup, reconnectBackoff)
-	if err != nil {
-		return "", err
-	}
-
-	return *nodeGroup.Body.NodeGroups[0].NodeGroupId, nil
-}
-
 // Function to bind certificate to domain
 func (r *emrMetricAutoScalingRulesResource) putRule(plan *emrMetricAutoScalingRulesModel) error {
-
 	putRule := func() error {
 		runtime := &util.RuntimeOptions{}
 		var scalingRules []*alicloudEmrClient.ScalingRule
@@ -466,20 +405,15 @@ func (r *emrMetricAutoScalingRulesResource) putRule(plan *emrMetricAutoScalingRu
 			)
 		}
 
-		nodeGroupId, err := r.getNodeGroup(plan)
-		if err != nil {
-			return err
-		}
-
 		putAutoScalingPolicyRequest := &alicloudEmrClient.PutAutoScalingPolicyRequest{
 			RegionId:     r.client.RegionId,
 			ClusterId:    tea.String(plan.ClusterId.ValueString()),
-			NodeGroupId:  &nodeGroupId,
+			NodeGroupId:  tea.String(plan.NodeGroupId.ValueString()),
 			Constraints:  scalingConstraints,
 			ScalingRules: scalingRules,
 		}
 
-		_, err = r.client.PutAutoScalingPolicyWithOptions(putAutoScalingPolicyRequest, runtime)
+		_, err := r.client.PutAutoScalingPolicyWithOptions(putAutoScalingPolicyRequest, runtime)
 		if err != nil {
 			if _t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*_t.Code) {
