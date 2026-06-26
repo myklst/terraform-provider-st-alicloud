@@ -55,8 +55,6 @@ type emrClusterNodeGroupModel struct {
 	GracefulShutdown   types.Bool               `tfsdk:"graceful_shutdown"`
 	SpotInstanceRemedy types.Bool               `tfsdk:"spot_instance_remedy"`
 	SubscriptionConfig *subscriptionConfigModel `tfsdk:"subscription_config"`
-	AutoScalingPolicy  *autoScalingModel        `tfsdk:"auto_scaling_policy"`
-	Timeouts           timeoutsModel            `tfsdk:"timeouts"`
 }
 
 type diskModel struct {
@@ -65,24 +63,12 @@ type diskModel struct {
 	Count    types.Int64  `tfsdk:"count"`
 }
 
-type autoScalingModel struct {
-	Enable      types.Bool  `tfsdk:"enable"`
-	MinCapacity types.Int64 `tfsdk:"min_capacity"`
-	MaxCapacity types.Int64 `tfsdk:"max_capacity"`
-}
-
 type subscriptionConfigModel struct {
 	AutoRenew             types.Bool   `tfsdk:"auto_renew"`
 	AutoRenewDuration     types.Int64  `tfsdk:"auto_renew_duration"`
 	AutoRenewDurationUnit types.String `tfsdk:"auto_renew_duration_unit"`
 	PaymentDuration       types.Int64  `tfsdk:"payment_duration"`
 	PaymentDurationUnit   types.String `tfsdk:"payment_duration_unit"`
-}
-
-type timeoutsModel struct {
-	Create types.String `tfsdk:"create"`
-	Update types.String `tfsdk:"update"`
-	Delete types.String `tfsdk:"delete"`
 }
 
 func (r *emrClusterNodeGroupResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -103,6 +89,9 @@ func (r *emrClusterNodeGroupResource) Schema(ctx context.Context, req resource.S
 			"node_group_id": schema.StringAttribute{
 				Computed:    true,
 				Description: "ID of the node group, assigned by AliCloud.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"node_group_name": schema.StringAttribute{
 				Required:    true,
@@ -142,6 +131,9 @@ func (r *emrClusterNodeGroupResource) Schema(ctx context.Context, req resource.S
 				Description: "Spot strategy for the ECS instances. Valid values: NoSpot, SpotWithPriceLimit, SpotAsPriceGo.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("NoSpot", "SpotWithPriceLimit", "SpotAsPriceGo"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"with_public_ip": schema.BoolAttribute{
@@ -251,14 +243,6 @@ func (r *emrClusterNodeGroupResource) Schema(ctx context.Context, req resource.S
 					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"timeouts": schema.SingleNestedAttribute{
-				Optional: true,
-				Attributes: map[string]schema.Attribute{
-					"create": schema.StringAttribute{Optional: true},
-					"update": schema.StringAttribute{Optional: true},
-					"delete": schema.StringAttribute{Optional: true},
-				},
-			},
 		},
 	}
 }
@@ -278,8 +262,8 @@ func (r *emrClusterNodeGroupResource) Create(ctx context.Context, req resource.C
 	}
 
 	var instanceTypes, vswitchIds []*string
-	resp.Diagnostics.Append(plan.InstanceTypes.ElementsAs(ctx, instanceTypes, false)...)
-	resp.Diagnostics.Append(plan.VSwitchIds.ElementsAs(ctx, vswitchIds, false)...)
+	resp.Diagnostics.Append(plan.InstanceTypes.ElementsAs(ctx, &instanceTypes, false)...)
+	resp.Diagnostics.Append(plan.VSwitchIds.ElementsAs(ctx, &vswitchIds, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -365,8 +349,13 @@ func (r *emrClusterNodeGroupResource) Create(ctx context.Context, req resource.C
 	nodeGroupId := tea.StringValue(createResp.Body.NodeGroupId)
 	plan.NodeGroupId = types.StringValue(nodeGroupId)
 
-	if err := r.waitForNodeGroupActive(plan.ClusterId.ValueString(), nodeGroupId, getTimeout(plan.Timeouts.Create, 30*time.Minute)); err != nil {
+	if err := r.waitForNodeGroupActive(plan.ClusterId.ValueString(), nodeGroupId, 30*time.Minute); err != nil {
 		resp.Diagnostics.AddError("Timed out waiting for node group to become active", err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(r.getNodeGroup(ctx, plan.ClusterId.ValueString(), nodeGroupId, plan)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -403,31 +392,37 @@ func (r *emrClusterNodeGroupResource) Update(ctx context.Context, req resource.U
 
 	if !plan.NodeGroupName.Equal(state.NodeGroupName) {
 		updateReq.NodeGroupName = tea.String(plan.NodeGroupName.ValueString())
+		state.NodeGroupName = plan.NodeGroupName
 	}
 
 	if !plan.InstanceTypes.Equal(state.InstanceTypes) {
 		var instanceTypes []*string
-		resp.Diagnostics.Append(plan.InstanceTypes.ElementsAs(ctx, instanceTypes, false)...)
+		resp.Diagnostics.Append(plan.InstanceTypes.ElementsAs(ctx, &instanceTypes, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		updateReq.InstanceTypeList = instanceTypes
+		state.InstanceTypes = plan.InstanceTypes
 	}
 
-	if !plan.NodeCount.Equal(state.NodeCount) {
+	if !plan.NodeCount.IsNull() && !plan.NodeCount.Equal(state.NodeCount) {
 		updateReq.NodeCount = tea.Int32(int32(plan.NodeCount.ValueInt64()))
+		state.NodeCount = plan.NodeCount
 	}
 
-	if !plan.SpotStrategy.Equal(state.SpotStrategy) {
+	if !plan.SpotStrategy.IsNull() && !plan.SpotStrategy.Equal(state.SpotStrategy) {
 		updateReq.EcsSpotStrategy = tea.String(plan.SpotStrategy.ValueString())
+		state.SpotStrategy = plan.SpotStrategy
 	}
 
-	if !plan.GracefulShutdown.Equal(state.GracefulShutdown) {
+	if !plan.GracefulShutdown.IsNull() && !plan.GracefulShutdown.Equal(state.GracefulShutdown) {
 		updateReq.EnableGracefulDecommission = tea.Bool(plan.GracefulShutdown.ValueBool())
+		state.GracefulShutdown = plan.GracefulShutdown
 	}
 
-	if !plan.SpotInstanceRemedy.Equal(state.SpotInstanceRemedy) {
+	if !plan.SpotInstanceRemedy.IsNull() && !plan.SpotInstanceRemedy.Equal(state.SpotInstanceRemedy) {
 		updateReq.SpotInstanceRemedy = tea.Bool(plan.SpotInstanceRemedy.ValueBool())
+		state.SpotInstanceRemedy = plan.SpotInstanceRemedy
 	}
 
 	_, err := r.client.UpdateNodeGroupAttributesWithOptions(updateReq, &util.RuntimeOptions{})
@@ -436,8 +431,12 @@ func (r *emrClusterNodeGroupResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	plan.NodeGroupId = state.NodeGroupId
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if err := r.waitForNodeGroupActive(plan.ClusterId.ValueString(), state.NodeGroupId.ValueString(), 30*time.Minute); err != nil {
+		resp.Diagnostics.AddError("Timed out waiting for node group to become active", err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *emrClusterNodeGroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -461,7 +460,7 @@ func (r *emrClusterNodeGroupResource) ImportState(ctx context.Context, req resou
 	// Expected import ID format: <cluster_id>:<node_group_id>
 	idParts := strings.Split(req.ID, ":")
 
-	var state *emrClusterNodeGroupModel
+	state := &emrClusterNodeGroupModel{}
 	resp.Diagnostics.Append(r.getNodeGroup(ctx, idParts[0], idParts[1], state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -488,13 +487,14 @@ func (r *emrClusterNodeGroupResource) waitForNodeGroupActive(clusterId, nodeGrou
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		resp, err := r.client.GetNodeGroup(&alicloudEmrClient.GetNodeGroupRequest{
+			RegionId:    r.client.RegionId,
 			ClusterId:   tea.String(clusterId),
 			NodeGroupId: tea.String(nodeGroupId),
 		})
 		if err != nil {
 			return err
 		}
-		state := tea.StringValue(resp.Body.NodeGroup.Status)
+		state := tea.StringValue(resp.Body.NodeGroup.NodeGroupState)
 		switch state {
 		case "RUNNING", "ACTIVE":
 			return nil
@@ -535,18 +535,22 @@ func (r *emrClusterNodeGroupResource) getNodeGroup(ctx context.Context, clusterI
 	state.PaymentType = types.StringValue(tea.StringValue(ng.PaymentType))
 	state.GracefulShutdown = types.BoolValue(tea.BoolValue(ng.GracefulShutdown))
 	state.SpotInstanceRemedy = types.BoolValue(tea.BoolValue(ng.SpotInstanceRemedy))
-	state.SystemDisk = &diskModel{
-		Category: types.StringValue(tea.StringValue(ng.SystemDisk.Category)),
-		Size:     types.Int64Value(int64(tea.Int32Value(ng.SystemDisk.Size))),
-		Count:    types.Int64Value(int64(tea.Int32Value(ng.SystemDisk.Count))),
+	if ng.SystemDisk != nil {
+		state.SystemDisk = &diskModel{
+			Category: types.StringValue(tea.StringValue(ng.SystemDisk.Category)),
+			Size:     types.Int64Value(int64(tea.Int32Value(ng.SystemDisk.Size))),
+			Count:    types.Int64Value(1),
+		}
 	}
 	var dds []*diskModel
 	for _, dd := range ng.DataDisks {
-		dds = append(dds, &diskModel{
-			Category: types.StringValue(tea.StringValue(dd.Category)),
-			Size:     types.Int64Value(int64(tea.Int32Value(dd.Size))),
-			Count:    types.Int64Value(int64(tea.Int32Value(dd.Count))),
-		})
+		if dd != nil {
+			dds = append(dds, &diskModel{
+				Category: types.StringValue(tea.StringValue(dd.Category)),
+				Size:     types.Int64Value(int64(tea.Int32Value(dd.Size))),
+				Count:    types.Int64Value(int64(tea.Int32Value(dd.Count))),
+			})
+		}
 	}
 	state.DataDisks = dds
 

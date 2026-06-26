@@ -118,15 +118,15 @@ scenario. The reason behind every resources and data sources are stated as below
 
   This resource is to bind user to a resource group. Binding user to a resource group allow user access to different resource groups.
 
+- **st-alicloud_emr_cluster_node_group**
+
+  This resource is designed to create node groups for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
+  do not fulfill in place update requirements when node_groups attribute used for_each.
+
 - **st-alicloud_emr_metric_auto_scaling_rules**
 
   This resource is designed to create auto scaling rules for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
   does not provide the option to create auto scaling rules for nodes. (Note: Only task nodes are eligible for auto scaling)
-
-- **st-alicloud_emr_node_group**
-
-  This resource is designed to create node groups for AliCloud E-MapReduce cluster as the provider's resource [*alicloud_emrv2_cluster*](https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/emrv2_cluster)
-  do not fulfill in place update requirements when node_groups attribute used for_each.
 
 - **st-alicloud_ess_clb_default_server_group_attachment**
 
