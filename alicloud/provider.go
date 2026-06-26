@@ -21,14 +21,14 @@ import (
 	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	alicloudAntiddosClient "github.com/alibabacloud-go/ddoscoo-20200101/v4/client"
 	alicloudEcdClient "github.com/alibabacloud-go/ecd-20200930/v5/client"
-	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/client"
+	alicloudEmrClient "github.com/alibabacloud-go/emr-20210320/v3/client"
 	alicloudEssClient "github.com/alibabacloud-go/ess-20220222/v2/client"
+	alicloudFoasconsoleClient "github.com/alibabacloud-go/foasconsole-20211028/v2/client"
 	alicloudImsClient "github.com/alibabacloud-go/ims-20190815/v4/client"
 	alicloudRamClient "github.com/alibabacloud-go/ram-20150501/v2/client"
 	alicloudServicemeshClient "github.com/alibabacloud-go/servicemesh-20200111/v4/client"
 	alicloudSlbClient "github.com/alibabacloud-go/slb-20140515/v4/client"
 	alicloudVvpClient "github.com/alibabacloud-go/ververica-20220718/client"
-	alicloudFoasconsoleClient "github.com/alibabacloud-go/foasconsole-20211028/v2/client"
 
 	"github.com/alibabacloud-go/tea/tea"
 )
@@ -502,6 +502,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewDdosCooWebconfigSslAttachmentResource,
 		NewDdosCooWebconfigCCRuleV2Resource,
 		NewAliadbResourceGroupBindResource,
+		NewEmrClusterNodeGroupResource,
 		NewEmrMetricAutoScalingRulesResource,
 		NewDdosCooWebAIProtectConfigResource,
 		NewEssClbDefaultServerGroupAttachmentResource,

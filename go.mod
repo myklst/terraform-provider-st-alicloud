@@ -7,9 +7,9 @@ toolchain go1.24.10
 require (
 	github.com/alibabacloud-go/alidns-20150109/v4 v4.0.1
 	github.com/alibabacloud-go/cdn-20180510/v2 v2.0.9
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.14
-	github.com/alibabacloud-go/tea v1.3.13
-	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.1
+	github.com/alibabacloud-go/tea v1.5.0
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.9
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
 	github.com/hashicorp/terraform-plugin-framework-validators v0.10.0
 )
@@ -19,6 +19,7 @@ require (
 	github.com/alibabacloud-go/bssopenapi-20171214/v3 v3.0.2
 	github.com/alibabacloud-go/ddoscoo-20200101/v4 v4.2.1
 	github.com/alibabacloud-go/ecd-20200930/v5 v5.23.0
+	github.com/alibabacloud-go/emr-20210320/v3 v3.4.0
 	github.com/alibabacloud-go/ess-20220222/v2 v2.0.10
 	github.com/alibabacloud-go/foasconsole-20211028/v2 v2.2.1
 	github.com/alibabacloud-go/ims-20190815/v4 v4.3.1
@@ -43,6 +44,7 @@ require (
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -75,7 +77,6 @@ require (
 	github.com/alibabacloud-go/cms-20190101/v8 v8.0.1
 	github.com/alibabacloud-go/cs-20151215/v4 v4.0.5
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
-	github.com/alibabacloud-go/emr-20210320 v1.1.0
 	github.com/alibabacloud-go/endpoint-util v1.1.1 // indirect
 	github.com/alibabacloud-go/ram-20150501/v2 v2.0.0
 	github.com/alibabacloud-go/servicemesh-20200111/v4 v4.3.1

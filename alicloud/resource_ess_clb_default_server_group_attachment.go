@@ -277,7 +277,7 @@ func (r *essClbDefaultServerGroupAttachmentResource) getLoadBalancersFromScaling
 		runtime := &util.RuntimeOptions{}
 
 		describeScalingGroupsRequest := &alicloudEssClient.DescribeScalingGroupsRequest{
-			RegionId: r.client.RegionId,
+			RegionId:        r.client.RegionId,
 			ScalingGroupIds: []*string{tea.String(model.ScalingGroupId.ValueString())},
 		}
 

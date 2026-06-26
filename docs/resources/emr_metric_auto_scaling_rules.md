@@ -76,14 +76,11 @@ resource "st-alicloud_emr_metric_auto_scaling_rules" "metric_auto_scaling" {
 - `cluster_id` (String) Alicloud E-MapReduce cluster ID.
 - `max_nodes` (Number) Maximum capacity of scaling for nodes.
 - `min_nodes` (Number) Minimum capacity of scaling for nodes.
+- `node_group_id` (String) Alicloud E-MapReduce cluster task node group ID.
 
 ### Optional
 
 - `scaling_rule` (Block List) (see [below for nested schema](#nestedblock--scaling_rule))
-
-### Read-Only
-
-- `node_group_id` (String) Alicloud E-MapReduce cluster task node group ID.
 
 <a id="nestedblock--scaling_rule"></a>
 ### Nested Schema for `scaling_rule`
