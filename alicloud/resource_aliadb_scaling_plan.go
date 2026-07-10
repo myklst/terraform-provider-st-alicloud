@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
@@ -296,13 +295,23 @@ func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.Delete
 			DBClusterId:     tea.String(state.DBClusterId.ValueString()),
 			ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
 		}
-		_, err := r.client.DisableElasticPlanWithOptions(disableReq, runtime)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already disabled") && !strings.Contains(err.Error(), "NotFound") {
-				resp.Diagnostics.AddWarning("Failed to disable plan prior to destruction", err.Error())
+		r.client.DisableElasticPlanWithOptions(disableReq, runtime)
+
+		describeReq := &alicloudAdbClientV4.DescribeElasticPlansRequest{
+			DBClusterId:     tea.String(state.DBClusterId.ValueString()),
+			ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
+		}
+
+		for i := 0; i < 15; i++ {
+			listResp, err := r.client.DescribeElasticPlansWithOptions(describeReq, runtime)
+			if err == nil && listResp != nil && listResp.Body != nil && len(listResp.Body.ElasticPlans) > 0 {
+				if !*listResp.Body.ElasticPlans[0].Enabled {
+					break
+				}
+			} else {
+				break
 			}
 		}
-		time.Sleep(2 * time.Second)
 	}
 
 	deleteReq := &alicloudAdbClientV4.DeleteElasticPlanRequest{
