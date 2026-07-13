@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 
@@ -311,6 +312,7 @@ func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.Delete
 			} else {
 				break
 			}
+			time.Sleep(2 * time.Second)
 		}
 	}
 
