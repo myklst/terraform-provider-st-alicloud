@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
+	alicloudAdbClientV4 "github.com/alibabacloud-go/adb-20211201/v4/client"
 	alicloudDnsClient "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	alicloudBaseClient "github.com/alibabacloud-go/bssopenapi-20171214/v3/client"
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
@@ -45,6 +46,7 @@ type alicloudClients struct {
 	ramClient         *alicloudRamClient.Client
 	cmsClient         *alicloudCmsClient.Client
 	adbClient         *alicloudAdbClient.Client
+	adbClientV4       *alicloudAdbClientV4.Client
 	emrClient         *alicloudEmrClient.Client
 	csClient          *alicloudCsClient.Client
 	essClient         *alicloudEssClient.Client
@@ -324,6 +326,20 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// AliCloud ADB ClientV4
+	adbClientV4Config := clientCredentialsConfig
+	adbClientV4Config.Endpoint = tea.String("adb.aliyuncs.com")
+	adbClientV4, err := alicloudAdbClientV4.NewClient(adbClientV4Config)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud ADB API ClientV4",
+			"An unexpected error occurred when creating the AliCloud ADB API clientV4. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud ADB ClientV4 Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud EMR Client
 	emrClientConfig := clientCredentialsConfig
 	emrClientConfig.Endpoint = tea.String(fmt.Sprintf("emr.%s.aliyuncs.com", region))
@@ -462,6 +478,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		ramClient:         ramClient,
 		cmsClient:         cmsClient,
 		adbClient:         adbClient,
+		adbClientV4:       adbClientV4,
 		emrClient:         emrClient,
 		csClient:          csClient,
 		essClient:         essClient,
@@ -502,6 +519,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewDdosCooWebconfigSslAttachmentResource,
 		NewDdosCooWebconfigCCRuleV2Resource,
 		NewAliadbResourceGroupBindResource,
+		NewAliadbScalingPlanResource,
 		NewEmrClusterNodeGroupResource,
 		NewEmrMetricAutoScalingRulesResource,
 		NewDdosCooWebAIProtectConfigResource,
