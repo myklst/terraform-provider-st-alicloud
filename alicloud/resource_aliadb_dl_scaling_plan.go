@@ -16,25 +16,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	alicloudAdbClientV4 "github.com/alibabacloud-go/adb-20211201/v4/client"
+	alicloudAdbClientdl "github.com/alibabacloud-go/adb-20211201/v4/client"
 	"github.com/alibabacloud-go/tea/tea"
 )
 
 var (
-	_ resource.Resource                = &adbScalingPlanResource{}
-	_ resource.ResourceWithConfigure   = &adbScalingPlanResource{}
-	_ resource.ResourceWithImportState = &adbScalingPlanResource{}
+	_ resource.Resource                = &adbDlScalingPlanResource{}
+	_ resource.ResourceWithConfigure   = &adbDlScalingPlanResource{}
+	_ resource.ResourceWithImportState = &adbDlScalingPlanResource{}
 )
 
-func NewAliadbScalingPlanResource() resource.Resource {
-	return &adbScalingPlanResource{}
+func NewAliadbdlScalingPlanResource() resource.Resource {
+	return &adbDlScalingPlanResource{}
 }
 
-type adbScalingPlanResource struct {
-	client *alicloudAdbClientV4.Client
+type adbDlScalingPlanResource struct {
+	client *alicloudAdbClientdl.Client
 }
 
-type adbScalingPlanResourceModel struct {
+type adbDlScalingPlanResourceModel struct {
 	Id                types.String `tfsdk:"id"`
 	DBClusterId       types.String `tfsdk:"db_cluster_id"`
 	ElasticPlanName   types.String `tfsdk:"elastic_plan_name"`
@@ -48,11 +48,11 @@ type adbScalingPlanResourceModel struct {
 	AutoScale         types.Bool   `tfsdk:"auto_scale"`
 }
 
-func (r *adbScalingPlanResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_aliadb_scaling_plan"
+func (r *adbDlScalingPlanResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_aliadb_dl_scaling_plan"
 }
 
-func (r *adbScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *adbDlScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -110,25 +110,25 @@ func (r *adbScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *adbScalingPlanResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *adbDlScalingPlanResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
-	r.client = req.ProviderData.(alicloudClients).adbClientV4
+	r.client = req.ProviderData.(alicloudClients).adbClientdl
 }
 
-func (r *adbScalingPlanResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan adbScalingPlanResourceModel
+func (r *adbDlScalingPlanResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan adbDlScalingPlanResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	createReq := &alicloudAdbClientV4.CreateElasticPlanRequest{
+	createReq := &alicloudAdbClientdl.CreateElasticPlanRequest{
 		DBClusterId:     tea.String(plan.DBClusterId.ValueString()),
 		ElasticPlanName: tea.String(plan.ElasticPlanName.ValueString()),
 		Type:            tea.String(plan.Type.ValueString()),
-		Enabled:         tea.Bool(plan.Enabled.ValueBool()), // Set Enable/Disable on creation
+		Enabled:         tea.Bool(plan.Enabled.ValueBool()),
 	}
 
 	if !plan.TargetSize.IsNull() {
@@ -162,14 +162,14 @@ func (r *adbScalingPlanResource) Create(ctx context.Context, req resource.Create
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *adbScalingPlanResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state adbScalingPlanResourceModel
+func (r *adbDlScalingPlanResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state adbDlScalingPlanResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	describeReq := &alicloudAdbClientV4.DescribeElasticPlansRequest{
+	describeReq := &alicloudAdbClientdl.DescribeElasticPlansRequest{
 		DBClusterId:     tea.String(state.DBClusterId.ValueString()),
 		ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
 		PageNumber:      tea.Int32(1),
@@ -216,8 +216,8 @@ func (r *adbScalingPlanResource) Read(ctx context.Context, req resource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *adbScalingPlanResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state adbScalingPlanResourceModel
+func (r *adbDlScalingPlanResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state adbDlScalingPlanResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -232,7 +232,7 @@ func (r *adbScalingPlanResource) Update(ctx context.Context, req resource.Update
 		(plan.EndTime != state.EndTime)
 
 	if needsModification {
-		modifyReq := &alicloudAdbClientV4.ModifyElasticPlanRequest{
+		modifyReq := &alicloudAdbClientdl.ModifyElasticPlanRequest{
 			DBClusterId:     tea.String(plan.DBClusterId.ValueString()),
 			ElasticPlanName: tea.String(plan.ElasticPlanName.ValueString()),
 		}
@@ -258,7 +258,7 @@ func (r *adbScalingPlanResource) Update(ctx context.Context, req resource.Update
 
 	if plan.Enabled.ValueBool() != state.Enabled.ValueBool() {
 		if plan.Enabled.ValueBool() {
-			enableReq := &alicloudAdbClientV4.EnableElasticPlanRequest{
+			enableReq := &alicloudAdbClientdl.EnableElasticPlanRequest{
 				DBClusterId:     tea.String(plan.DBClusterId.ValueString()),
 				ElasticPlanName: tea.String(plan.ElasticPlanName.ValueString()),
 			}
@@ -268,7 +268,7 @@ func (r *adbScalingPlanResource) Update(ctx context.Context, req resource.Update
 				return
 			}
 		} else {
-			disableReq := &alicloudAdbClientV4.DisableElasticPlanRequest{
+			disableReq := &alicloudAdbClientdl.DisableElasticPlanRequest{
 				DBClusterId:     tea.String(plan.DBClusterId.ValueString()),
 				ElasticPlanName: tea.String(plan.ElasticPlanName.ValueString()),
 			}
@@ -283,8 +283,8 @@ func (r *adbScalingPlanResource) Update(ctx context.Context, req resource.Update
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state adbScalingPlanResourceModel
+func (r *adbDlScalingPlanResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state adbDlScalingPlanResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -292,13 +292,13 @@ func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.Delete
 	runtime := &util.RuntimeOptions{}
 
 	if state.Enabled.ValueBool() {
-		disableReq := &alicloudAdbClientV4.DisableElasticPlanRequest{
+		disableReq := &alicloudAdbClientdl.DisableElasticPlanRequest{
 			DBClusterId:     tea.String(state.DBClusterId.ValueString()),
 			ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
 		}
 		r.client.DisableElasticPlanWithOptions(disableReq, runtime)
 
-		describeReq := &alicloudAdbClientV4.DescribeElasticPlansRequest{
+		describeReq := &alicloudAdbClientdl.DescribeElasticPlansRequest{
 			DBClusterId:     tea.String(state.DBClusterId.ValueString()),
 			ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
 		}
@@ -316,7 +316,7 @@ func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.Delete
 		}
 	}
 
-	deleteReq := &alicloudAdbClientV4.DeleteElasticPlanRequest{
+	deleteReq := &alicloudAdbClientdl.DeleteElasticPlanRequest{
 		DBClusterId:     tea.String(state.DBClusterId.ValueString()),
 		ElasticPlanName: tea.String(state.ElasticPlanName.ValueString()),
 	}
@@ -331,7 +331,7 @@ func (r *adbScalingPlanResource) Delete(ctx context.Context, req resource.Delete
 	}
 }
 
-func (r *adbScalingPlanResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *adbDlScalingPlanResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idParts := strings.Split(req.ID, ":")
 
 	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
