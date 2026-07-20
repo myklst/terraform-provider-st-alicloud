@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
-	alicloudAdbClientV4 "github.com/alibabacloud-go/adb-20211201/v4/client"
+	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v6/client"
+	alicloudAdbLakeClient "github.com/alibabacloud-go/adb-20211201/v4/client"
 	alicloudDnsClient "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	alicloudBaseClient "github.com/alibabacloud-go/bssopenapi-20171214/v3/client"
 	alicloudCdnClient "github.com/alibabacloud-go/cdn-20180510/v2/client"
@@ -46,7 +46,7 @@ type alicloudClients struct {
 	ramClient         *alicloudRamClient.Client
 	cmsClient         *alicloudCmsClient.Client
 	adbClient         *alicloudAdbClient.Client
-	adbClientV4       *alicloudAdbClientV4.Client
+	adbLakeClient     *alicloudAdbLakeClient.Client
 	emrClient         *alicloudEmrClient.Client
 	csClient          *alicloudCsClient.Client
 	essClient         *alicloudEssClient.Client
@@ -312,7 +312,21 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// AliCloud ADB Client
+	// AliCloud ADB Client (Data Lakehouse edition)
+	adbLakeClientConfig := clientCredentialsConfig
+	adbLakeClientConfig.Endpoint = tea.String("adb.aliyuncs.com")
+	adbLakeClient, err := alicloudAdbLakeClient.NewClient(adbLakeClientConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud ADB API Clientdl",
+			"An unexpected error occurred when creating the AliCloud ADB API clientV4. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud ADB ClientV4 Error: "+err.Error(),
+		)
+		return
+	}
+
+	// AliCloud ADB Client (Data Warehouse edition)
 	adbClientConfig := clientCredentialsConfig
 	adbClientConfig.Endpoint = tea.String("adb.aliyuncs.com")
 	adbClient, err := alicloudAdbClient.NewClient(adbClientConfig)
@@ -322,20 +336,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 			"An unexpected error occurred when creating the AliCloud ADB API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
 				"AliCloud ADB Client Error: "+err.Error(),
-		)
-		return
-	}
-
-	// AliCloud ADB ClientV4
-	adbClientV4Config := clientCredentialsConfig
-	adbClientV4Config.Endpoint = tea.String("adb.aliyuncs.com")
-	adbClientV4, err := alicloudAdbClientV4.NewClient(adbClientV4Config)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Create AliCloud ADB API ClientV4",
-			"An unexpected error occurred when creating the AliCloud ADB API clientV4. "+
-				"If the error is not clear, please contact the provider developers.\n\n"+
-				"AliCloud ADB ClientV4 Error: "+err.Error(),
 		)
 		return
 	}
@@ -478,7 +478,7 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		ramClient:         ramClient,
 		cmsClient:         cmsClient,
 		adbClient:         adbClient,
-		adbClientV4:       adbClientV4,
+		adbLakeClient:     adbLakeClient,
 		emrClient:         emrClient,
 		csClient:          csClient,
 		essClient:         essClient,
@@ -519,6 +519,7 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewDdosCooWebconfigSslAttachmentResource,
 		NewDdosCooWebconfigCCRuleV2Resource,
 		NewAliadbResourceGroupBindResource,
+		NewAliadbLakeVersionScalingPlanResource,
 		NewAliadbScalingPlanResource,
 		NewEmrClusterNodeGroupResource,
 		NewEmrMetricAutoScalingRulesResource,

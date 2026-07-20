@@ -16,6 +16,8 @@ github.com/ProtonMail/go-crypto v1.1.6 h1:ZcV+Ropw6Qn0AX9brlQLAUXfqLBc7Bl+f/DmNx
 github.com/ProtonMail/go-crypto v1.1.6/go.mod h1:rA3QumHc/FZ8pAHreoekgiAbzpNsfQAosU5td4SnOrE=
 github.com/alibabacloud-go/adb-20190315/v2 v2.1.2 h1:6ZjJxgW7ayR4D6NpTc+TxIjmkk2KQ/09SqVmOZdQXwQ=
 github.com/alibabacloud-go/adb-20190315/v2 v2.1.2/go.mod h1:0tUGicl9MOgEVR9AGPZI+YzCSXMGto2ZY+6H6/ifRN0=
+github.com/alibabacloud-go/adb-20190315/v6 v6.0.11 h1:EOJ8iTmhBLoCLVRo773Y/dG8mWU2wIvGdegIs5MxO7g=
+github.com/alibabacloud-go/adb-20190315/v6 v6.0.11/go.mod h1:1YDxx+UKQi30x0rmCvXZ6wuMR9VP10SQY5XpjIcTk/I=
 github.com/alibabacloud-go/adb-20211201/v4 v4.7.1 h1:WASWfR8dPz5XXDYezKt2QR2CN0pSsdzs8p8TrgiJ1eU=
 github.com/alibabacloud-go/adb-20211201/v4 v4.7.1/go.mod h1:qnPVitUFzqkJNbmKnAdf+eKLEVzwWQ7XvlSQBm2gTVs=
 github.com/alibabacloud-go/alibabacloud-gateway-pop v0.0.6 h1:eIf+iGJxdU4U9ypaUfbtOWCsZSbTb8AUHvyPrxu6mAA=
