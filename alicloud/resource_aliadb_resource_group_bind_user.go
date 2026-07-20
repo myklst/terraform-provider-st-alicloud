@@ -8,7 +8,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 
-	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v2/client"
+	alicloudAdbClient "github.com/alibabacloud-go/adb-20190315/v6/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/hashicorp/terraform-plugin-framework/path"
