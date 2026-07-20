@@ -50,7 +50,7 @@ type adbScalingPlanModel struct {
 }
 
 func (r *adbScalingPlanResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "__adb_db_cluster_scaling_plan"
+	resp.TypeName = req.ProviderTypeName + "_adb_db_cluster_scaling_plan"
 }
 
 func (r *adbScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
