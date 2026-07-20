@@ -1,4 +1,4 @@
-resource "st-alicloud_aliadb_scaling_plan" "scaling_plan" {
+resource "st-alicloud_adb_db_cluster_lake_version_scaling_plan" "scaling_plan" {
   db_cluster_id       = "amv-wz9509beptiz****"
   elastic_plan_name   = "adb_scale_plan"
   type                = "EXECUTOR"

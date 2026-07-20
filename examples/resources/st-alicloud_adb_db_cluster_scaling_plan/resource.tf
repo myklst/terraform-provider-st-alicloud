@@ -1,4 +1,4 @@
-resource "st-alicloud_aliadb_dw_scaling_plan" "monthly_plan" {
+resource "st-alicloud_adb_db_cluster_scaling_plan" "monthly_plan" {
   db_cluster_id               = "am-bp1xxxxxxxx"
   elastic_plan_name           = "adb_scale_plan"
   elastic_plan_time_start     = "01:00:00"

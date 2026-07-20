@@ -21,20 +21,20 @@ import (
 )
 
 var (
-	_ resource.Resource                = &adbDlScalingPlanResource{}
-	_ resource.ResourceWithConfigure   = &adbDlScalingPlanResource{}
-	_ resource.ResourceWithImportState = &adbDlScalingPlanResource{}
+	_ resource.Resource                = &adbLakeVersionScalingPlanResource{}
+	_ resource.ResourceWithConfigure   = &adbLakeVersionScalingPlanResource{}
+	_ resource.ResourceWithImportState = &adbLakeVersionScalingPlanResource{}
 )
 
-func NewAliadbdlScalingPlanResource() resource.Resource {
-	return &adbDlScalingPlanResource{}
+func NewAliadbLakeVersionScalingPlanResource() resource.Resource {
+	return &adbLakeVersionScalingPlanResource{}
 }
 
-type adbDlScalingPlanResource struct {
+type adbLakeVersionScalingPlanResource struct {
 	client *alicloudAdbClientdl.Client
 }
 
-type adbDlScalingPlanResourceModel struct {
+type adbLakeVersionScalingPlanResourceModel struct {
 	Id                types.String `tfsdk:"id"`
 	DBClusterId       types.String `tfsdk:"db_cluster_id"`
 	ElasticPlanName   types.String `tfsdk:"elastic_plan_name"`
@@ -48,11 +48,11 @@ type adbDlScalingPlanResourceModel struct {
 	AutoScale         types.Bool   `tfsdk:"auto_scale"`
 }
 
-func (r *adbDlScalingPlanResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_aliadb_dl_scaling_plan"
+func (r *adbLakeVersionScalingPlanResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_adb_db_cluster_lake_version_scaling_plan"
 }
 
-func (r *adbDlScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *adbLakeVersionScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -110,15 +110,15 @@ func (r *adbDlScalingPlanResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-func (r *adbDlScalingPlanResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *adbLakeVersionScalingPlanResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).adbClientdl
 }
 
-func (r *adbDlScalingPlanResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan adbDlScalingPlanResourceModel
+func (r *adbLakeVersionScalingPlanResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan adbLakeVersionScalingPlanResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -162,8 +162,8 @@ func (r *adbDlScalingPlanResource) Create(ctx context.Context, req resource.Crea
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *adbDlScalingPlanResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state adbDlScalingPlanResourceModel
+func (r *adbLakeVersionScalingPlanResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state adbLakeVersionScalingPlanResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -216,8 +216,8 @@ func (r *adbDlScalingPlanResource) Read(ctx context.Context, req resource.ReadRe
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *adbDlScalingPlanResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state adbDlScalingPlanResourceModel
+func (r *adbLakeVersionScalingPlanResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state adbLakeVersionScalingPlanResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -283,8 +283,8 @@ func (r *adbDlScalingPlanResource) Update(ctx context.Context, req resource.Upda
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *adbDlScalingPlanResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state adbDlScalingPlanResourceModel
+func (r *adbLakeVersionScalingPlanResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state adbLakeVersionScalingPlanResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -331,7 +331,7 @@ func (r *adbDlScalingPlanResource) Delete(ctx context.Context, req resource.Dele
 	}
 }
 
-func (r *adbDlScalingPlanResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *adbLakeVersionScalingPlanResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idParts := strings.Split(req.ID, ":")
 
 	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
