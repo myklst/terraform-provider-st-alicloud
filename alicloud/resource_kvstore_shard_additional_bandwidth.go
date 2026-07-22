@@ -8,6 +8,7 @@ import (
 	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/service"
+	utilV2 "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,7 +19,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	alicloudKvstoreClient "github.com/alibabacloud-go/r-kvstore-20150101/client"
-	openapiClient "github.com/alibabacloud-go/darabonba-openapi/client"
+	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	openapiutil "github.com/alibabacloud-go/openapi-util/service"
 )
 
 var (
@@ -32,7 +34,9 @@ func NewKvstoreShardAdditionalBandwidthResource() resource.Resource {
 }
 
 type kvstoreShardAdditionalBandwidthResource struct {
-	client *alicloudKvstoreClient.Client
+	client    *alicloudKvstoreClient.Client
+	rawClient *alicloudOpenapiClient.Client
+	region    string
 }
 
 type kvstoreShardAdditionalBandwidthModel struct {
@@ -98,6 +102,8 @@ func (r *kvstoreShardAdditionalBandwidthResource) Configure(_ context.Context, r
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).kvstoreClient
+	r.rawClient = req.ProviderData.(alicloudClients).kvstoreRawClient
+	r.region = req.ProviderData.(alicloudClients).region
 }
 
 func (r *kvstoreShardAdditionalBandwidthResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -283,27 +289,27 @@ func (r *kvstoreShardAdditionalBandwidthResource) enableAdditionalBandwidth(inst
 	bwStr := strconv.FormatInt(bandwidth, 10)
 
 	enableBw := func() error {
-		runtime := &util.RuntimeOptions{}
-		params := &openapiClient.Params{
+		runtime := &utilV2.RuntimeOptions{}
+		params := &alicloudOpenapiClient.Params{
 			Action:      tea.String("EnableAdditionalBandwidth"),
 			Version:     tea.String("2015-01-01"),
 			Protocol:    tea.String("HTTPS"),
 			Pathname:    tea.String("/"),
 			Method:      tea.String("POST"),
 			AuthType:    tea.String("AK"),
-			BodyType:    tea.String("Json"),
-			ReqBodyType: tea.String("Query"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
 			Style:       tea.String("RPC"),
 		}
-		openapiReq := &openapiClient.OpenApiRequest{
-			Query: map[string]*string{
-				"InstanceId": tea.String(instanceId),
-				"NodeId":     tea.String(nodeId),
-				"Bandwidth":  tea.String(bwStr),
-				"ChargeType": tea.String("PostPaid"),
-			},
+		queries := map[string]any{}
+		queries["InstanceId"] = tea.String(instanceId)
+		queries["NodeId"] = tea.String(nodeId)
+		queries["Bandwidth"] = tea.String(bwStr)
+		queries["ChargeType"] = tea.String("PostPaid")
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
 		}
-		_, err := r.client.CallApi(params, openapiReq, runtime)
+		_, err := r.rawClient.CallApi(params, openapiReq, runtime)
 		if err != nil {
 			if t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*t.Code) {
@@ -317,24 +323,45 @@ func (r *kvstoreShardAdditionalBandwidthResource) enableAdditionalBandwidth(inst
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 5 * time.Minute
 	err := backoff.Retry(enableBw, reconnectBackoff)
 	if err != nil {
 		return fmt.Errorf("failed to enable additional bandwidth for shard %s: %w", nodeId, err)
 	}
+
+	// Wait for instance to return to Normal before returning
+	if waitErr := r.waitForInstanceNormal(instanceId, 5*time.Minute); waitErr != nil {
+		return fmt.Errorf("bandwidth set but instance %s did not return to Normal: %w", instanceId, waitErr)
+	}
 	return nil
 }
 
-// resetBandwidth resets a shard's bandwidth to the instance default via ModifyIntranetAttribute.
+// resetBandwidth resets a shard's additional bandwidth via EnableAdditionalBandwidth with bandwidth=0.
+// Note: ModifyIntranetAttribute doesn't work for all instance types — the API returns
+// ModifyBandWidth.NotSupport and tells us to use EnableAdditionalBandwidth instead.
 func (r *kvstoreShardAdditionalBandwidthResource) resetBandwidth(instanceId, nodeId string) error {
 	resetBw := func() error {
-		runtime := &util.RuntimeOptions{}
-		request := &alicloudKvstoreClient.ModifyIntranetAttributeRequest{
-			InstanceId: tea.String(instanceId),
-			NodeId:     tea.String(nodeId),
-			BandWidth:  tea.Int64(0),
+		runtime := &utilV2.RuntimeOptions{}
+		params := &alicloudOpenapiClient.Params{
+			Action:      tea.String("EnableAdditionalBandwidth"),
+			Version:     tea.String("2015-01-01"),
+			Protocol:    tea.String("HTTPS"),
+			Pathname:    tea.String("/"),
+			Method:      tea.String("POST"),
+			AuthType:    tea.String("AK"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
+			Style:       tea.String("RPC"),
 		}
-		_, err := r.client.ModifyIntranetAttributeWithOptions(request, runtime)
+		queries := map[string]any{}
+		queries["InstanceId"] = tea.String(instanceId)
+		queries["NodeId"] = tea.String(nodeId)
+		queries["Bandwidth"] = tea.String("0")
+		queries["ChargeType"] = tea.String("PostPaid")
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
+		}
+		_, err := r.rawClient.CallApi(params, openapiReq, runtime)
 		if err != nil {
 			if t, ok := err.(*tea.SDKError); ok {
 				if isAbleToRetry(*t.Code) {
@@ -348,10 +375,15 @@ func (r *kvstoreShardAdditionalBandwidthResource) resetBandwidth(instanceId, nod
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 5 * time.Minute
 	err := backoff.Retry(resetBw, reconnectBackoff)
 	if err != nil {
 		return fmt.Errorf("failed to reset bandwidth for shard %s: %w", nodeId, err)
+	}
+
+	// Wait for instance to return to Normal before returning
+	if waitErr := r.waitForInstanceNormal(instanceId, 5*time.Minute); waitErr != nil {
+		return fmt.Errorf("bandwidth reset but instance %s did not return to Normal: %w", instanceId, waitErr)
 	}
 	return nil
 }
@@ -391,10 +423,53 @@ func (r *kvstoreShardAdditionalBandwidthResource) readNodeBandwidth(instanceId, 
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 5 * time.Minute
 	err = backoff.Retry(readBw, reconnectBackoff)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to read bandwidth for shard %s: %w", nodeId, err)
 	}
 	return currentBw, isBurstOpen, nil
+}
+
+// waitForInstanceNormal polls DescribeInstances until status == "Normal" or timeout
+func (r *kvstoreShardAdditionalBandwidthResource) waitForInstanceNormal(instanceId string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 10 * time.Second
+
+	for time.Now().Before(deadline) {
+		runtime := &utilV2.RuntimeOptions{}
+		params := &alicloudOpenapiClient.Params{
+			Action:      tea.String("DescribeInstances"),
+			Version:     tea.String("2015-01-01"),
+			Protocol:    tea.String("HTTPS"),
+			Pathname:    tea.String("/"),
+			Method:      tea.String("POST"),
+			AuthType:    tea.String("AK"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
+			Style:       tea.String("RPC"),
+		}
+		queries := map[string]any{}
+		queries["RegionId"] = tea.String(r.region)
+		queries["InstanceIds"] = tea.String(instanceId)
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
+		}
+		result, err := r.rawClient.CallApi(params, openapiReq, runtime)
+		if err == nil && result != nil {
+			if body, ok := result["body"].(map[string]any); ok {
+				if insts, ok := body["Instances"].(map[string]any); ok {
+					if kvInsts, ok := insts["KVStoreInstance"].([]any); ok && len(kvInsts) > 0 {
+						if inst, ok := kvInsts[0].(map[string]any); ok {
+							if status, ok := inst["InstanceStatus"].(string); ok && status == "Normal" {
+								return nil
+							}
+						}
+					}
+				}
+			}
+		}
+		time.Sleep(pollInterval)
+	}
+	return fmt.Errorf("timed out waiting for instance %s to reach Normal status", instanceId)
 }

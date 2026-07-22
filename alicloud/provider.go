@@ -38,6 +38,7 @@ import (
 
 // Wrapper of AliCloud client
 type alicloudClients struct {
+	region            string
 	baseClient        *alicloudBaseClient.Client
 	cdnClient         *alicloudCdnClient.Client
 	antiddosClient    *alicloudAntiddosClient.Client
@@ -55,6 +56,7 @@ type alicloudClients struct {
 	servicemeshClient *alicloudServicemeshClient.Client
 	imsClient         *alicloudImsClient.Client
 	kvstoreClient     *alicloudKvstoreClient.Client
+	kvstoreRawClient  *alicloudOpenapiClient.Client
 	ververicaClient   *alicloudVvpClient.Client
 	foasconsoleClient *alicloudFoasconsoleClient.Client
 }
@@ -437,6 +439,24 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// v2 openapi client for raw CallApi calls to r-kvstore (v1 SDK lacks BandWidthBurst/ChargeType fields)
+	kvstoreRawClientConfig := &alicloudOpenapiClient.Config{
+		RegionId:        &region,
+		AccessKeyId:     &accessKey,
+		AccessKeySecret: &secretKey,
+		Endpoint:        tea.String(fmt.Sprintf("r-kvstore.%s.aliyuncs.com", region)),
+	}
+	kvstoreRawClient, err := alicloudOpenapiClient.NewClient(kvstoreRawClientConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create AliCloud R-Kvstore Raw API Client",
+			"An unexpected error occurred when creating the AliCloud R-Kvstore raw API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"AliCloud R-Kvstore Raw Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	// AliCloud ECD SDK Client
 	ecdClientConfig := &alicloudOpenapiClient.Config{
 		RegionId:        &region,
@@ -502,11 +522,13 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		adbClient:         adbClient,
 		adbLakeClient:     adbLakeClient,
 		emrClient:         emrClient,
+		region:            region,
 		csClient:          csClient,
 		essClient:         essClient,
 		servicemeshClient: servicemeshClient,
 		imsClient:         imsClient,
 		kvstoreClient:     kvstoreClient,
+		kvstoreRawClient:  kvstoreRawClient,
 		ecdClient:         ecdClient,
 		customEcdClient:   customEcdClient,
 		ververicaClient:   ververicaClient,

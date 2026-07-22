@@ -27,7 +27,8 @@ func isAbleToRetry(errCode string) bool {
 		ERR_THROTTLING_API,
 		ERR_THROTTLING,
 		ERR_UNKNOWN_ERROR,
-		ERR_INTERNAL_ERROR:
+		ERR_INTERNAL_ERROR,
+		"instancestatus.notsupport":
 		return true
 	default:
 		return false

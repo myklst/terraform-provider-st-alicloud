@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
+	util "github.com/alibabacloud-go/tea-utils/v2/service"
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -15,8 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	alicloudKvstoreClient "github.com/alibabacloud-go/r-kvstore-20150101/client"
-	openapiClient "github.com/alibabacloud-go/darabonba-openapi/client"
+	alicloudOpenapiClient "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	openapiutil "github.com/alibabacloud-go/openapi-util/service"
 )
 
 var (
@@ -30,7 +30,8 @@ func NewKvstoreInstanceBandwidthBurstResource() resource.Resource {
 }
 
 type kvstoreInstanceBandwidthBurstResource struct {
-	client *alicloudKvstoreClient.Client
+	client *alicloudOpenapiClient.Client
+	region string
 }
 
 type kvstoreInstanceBandwidthBurstModel struct {
@@ -74,7 +75,8 @@ func (r *kvstoreInstanceBandwidthBurstResource) Configure(_ context.Context, req
 	if req.ProviderData == nil {
 		return
 	}
-	r.client = req.ProviderData.(alicloudClients).kvstoreClient
+	r.client = req.ProviderData.(alicloudClients).kvstoreRawClient
+	r.region = req.ProviderData.(alicloudClients).region
 }
 
 func (r *kvstoreInstanceBandwidthBurstResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -185,29 +187,29 @@ func (r *kvstoreInstanceBandwidthBurstResource) ImportState(ctx context.Context,
 	resource.ImportStatePassthroughID(ctx, path.Root("instance_id"), req, resp)
 }
 
-// readBurst reads the current burst status via DescribeIntranetAttribute.
-// The Go SDK v1.0.7 doesn't expose IntranetBandWidthBurst in the response struct,
-// so we use CallApi to get the raw response.
+// readBurst reads the current burst status.
+// Primary: DescribeIntranetAttribute → IntranetBandWidthBurst (not always returned)
+// Fallback: DescribeRoleZoneInfo → IsOpenBandWidthService on any node
 func (r *kvstoreInstanceBandwidthBurstResource) readBurst(instanceId string) (bool, error) {
 	var burstEnabled bool
 
 	readBurst := func() error {
 		runtime := &util.RuntimeOptions{}
-		params := &openapiClient.Params{
+		params := &alicloudOpenapiClient.Params{
 			Action:      tea.String("DescribeIntranetAttribute"),
 			Version:     tea.String("2015-01-01"),
 			Protocol:    tea.String("HTTPS"),
 			Pathname:    tea.String("/"),
 			Method:      tea.String("POST"),
 			AuthType:    tea.String("AK"),
-			BodyType:    tea.String("Json"),
-			ReqBodyType: tea.String("Query"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
 			Style:       tea.String("RPC"),
 		}
-		openapiReq := &openapiClient.OpenApiRequest{
-			Query: map[string]*string{
-				"InstanceId": tea.String(instanceId),
-			},
+		queries := map[string]any{}
+		queries["InstanceId"] = tea.String(instanceId)
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
 		}
 		result, err := r.client.CallApi(params, openapiReq, runtime)
 		if err != nil {
@@ -220,11 +222,52 @@ func (r *kvstoreInstanceBandwidthBurstResource) readBurst(instanceId string) (bo
 			return err
 		}
 
-		// Parse IntranetBandWidthBurst from raw response
+		// Parse IntranetBandWidthBurst from raw response (nested under "body")
 		if result != nil {
-			if burstVal, ok := result["IntranetBandWidthBurst"]; ok {
-				if s, ok := burstVal.(string); ok {
-					burstEnabled = s == "true" || s == "True" || s == "1"
+			if body, ok := result["body"].(map[string]any); ok {
+				if burstVal, ok := body["IntranetBandWidthBurst"]; ok {
+					if s, ok := burstVal.(string); ok {
+						burstEnabled = s == "true" || s == "True" || s == "1"
+						return nil
+					}
+				}
+			}
+		}
+
+		// Fallback: use DescribeRoleZoneInfo → IsOpenBandWidthService
+		// This works when DescribeIntranetAttribute doesn't expose the burst field
+		zoneParams := &alicloudOpenapiClient.Params{
+			Action:      tea.String("DescribeRoleZoneInfo"),
+			Version:     tea.String("2015-01-01"),
+			Protocol:    tea.String("HTTPS"),
+			Pathname:    tea.String("/"),
+			Method:      tea.String("POST"),
+			AuthType:    tea.String("AK"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
+			Style:       tea.String("RPC"),
+		}
+		zoneQueries := map[string]any{}
+		zoneQueries["InstanceId"] = tea.String(instanceId)
+		zoneReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(zoneQueries),
+		}
+		zoneResult, err := r.client.CallApi(zoneParams, zoneReq, runtime)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+		if zoneResult != nil {
+			if body, ok := zoneResult["body"].(map[string]any); ok {
+				if nodeContainer, ok := body["Node"].(map[string]any); ok {
+					if nodes, ok := nodeContainer["NodeInfo"].([]any); ok && len(nodes) > 0 {
+						if firstNode, ok := nodes[0].(map[string]any); ok {
+							if val, ok := firstNode["IsOpenBandWidthService"]; ok {
+								if b, ok := val.(bool); ok {
+									burstEnabled = b
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -251,23 +294,23 @@ func (r *kvstoreInstanceBandwidthBurstResource) setBurst(instanceId string, enab
 
 	enableBurst := func() error {
 		runtime := &util.RuntimeOptions{}
-		params := &openapiClient.Params{
+		params := &alicloudOpenapiClient.Params{
 			Action:      tea.String("EnableAdditionalBandwidth"),
 			Version:     tea.String("2015-01-01"),
 			Protocol:    tea.String("HTTPS"),
 			Pathname:    tea.String("/"),
 			Method:      tea.String("POST"),
 			AuthType:    tea.String("AK"),
-			BodyType:    tea.String("Json"),
-			ReqBodyType: tea.String("Query"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
 			Style:       tea.String("RPC"),
 		}
-		openapiReq := &openapiClient.OpenApiRequest{
-			Query: map[string]*string{
-				"InstanceId":      tea.String(instanceId),
-				"BandWidthBurst":  tea.String(burstStr),
-				"ChargeType":      tea.String("PostPaid"),
-			},
+		queries := map[string]any{}
+		queries["InstanceId"] = tea.String(instanceId)
+		queries["BandWidthBurst"] = tea.String(burstStr)
+		queries["ChargeType"] = tea.String("PostPaid")
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
 		}
 		_, err := r.client.CallApi(params, openapiReq, runtime)
 		if err != nil {
@@ -283,10 +326,59 @@ func (r *kvstoreInstanceBandwidthBurstResource) setBurst(instanceId string, enab
 	}
 
 	reconnectBackoff := backoff.NewExponentialBackOff()
-	reconnectBackoff.MaxElapsedTime = 30 * time.Second
+	reconnectBackoff.MaxElapsedTime = 5 * time.Minute
 	err := backoff.Retry(enableBurst, reconnectBackoff)
 	if err != nil {
 		return fmt.Errorf("failed to set bandwidth burst for instance %s: %w", instanceId, err)
 	}
+
+	// Wait for instance to return to Normal status before returning
+	// so subsequent operations don't hit InstanceStatus.NotSupport
+	if waitErr := r.waitForInstanceNormal(instanceId, 5*time.Minute); waitErr != nil {
+		return fmt.Errorf("burst set but instance %s did not return to Normal: %w", instanceId, waitErr)
+	}
 	return nil
+}
+
+// waitForInstanceNormal polls DescribeInstances until status == "Normal" or timeout
+func (r *kvstoreInstanceBandwidthBurstResource) waitForInstanceNormal(instanceId string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 10 * time.Second
+
+	for time.Now().Before(deadline) {
+		runtime := &util.RuntimeOptions{}
+		params := &alicloudOpenapiClient.Params{
+			Action:      tea.String("DescribeInstances"),
+			Version:     tea.String("2015-01-01"),
+			Protocol:    tea.String("HTTPS"),
+			Pathname:    tea.String("/"),
+			Method:      tea.String("POST"),
+			AuthType:    tea.String("AK"),
+			BodyType:    tea.String("json"),
+			ReqBodyType: tea.String("json"),
+			Style:       tea.String("RPC"),
+		}
+		queries := map[string]any{}
+		queries["RegionId"] = tea.String(r.region)
+		queries["InstanceIds"] = tea.String(instanceId)
+		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+			Query: openapiutil.Query(queries),
+		}
+		result, err := r.client.CallApi(params, openapiReq, runtime)
+		if err == nil && result != nil {
+			if body, ok := result["body"].(map[string]any); ok {
+				if insts, ok := body["Instances"].(map[string]any); ok {
+					if kvInsts, ok := insts["KVStoreInstance"].([]any); ok && len(kvInsts) > 0 {
+						if inst, ok := kvInsts[0].(map[string]any); ok {
+							if status, ok := inst["InstanceStatus"].(string); ok && status == "Normal" {
+								return nil
+							}
+						}
+					}
+				}
+			}
+		}
+		time.Sleep(pollInterval)
+	}
+	return fmt.Errorf("timed out waiting for instance %s to reach Normal status", instanceId)
 }
