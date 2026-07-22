@@ -16,7 +16,10 @@ require (
 
 require (
 	github.com/alibabacloud-go/adb-20190315/v2 v2.1.2
+	github.com/alibabacloud-go/adb-20190315/v6 v6.0.11
+	github.com/alibabacloud-go/adb-20211201/v4 v4.7.1
 	github.com/alibabacloud-go/bssopenapi-20171214/v3 v3.0.2
+	github.com/alibabacloud-go/darabonba-openapi v0.1.14
 	github.com/alibabacloud-go/ddoscoo-20200101/v4 v4.2.1
 	github.com/alibabacloud-go/ecd-20200930/v5 v5.23.0
 	github.com/alibabacloud-go/emr-20210320/v3 v3.4.0
@@ -24,7 +27,9 @@ require (
 	github.com/alibabacloud-go/foasconsole-20211028/v2 v2.2.1
 	github.com/alibabacloud-go/ims-20190815/v4 v4.3.1
 	github.com/alibabacloud-go/openapi-util v0.1.1
+	github.com/alibabacloud-go/r-kvstore-20150101 v1.0.7
 	github.com/alibabacloud-go/slb-20140515/v4 v4.0.1
+	github.com/alibabacloud-go/tea-utils v1.4.3
 	github.com/alibabacloud-go/ververica-20220718 v1.10.1
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/deckarep/golang-set/v2 v2.8.0
@@ -37,8 +42,6 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
-	github.com/alibabacloud-go/adb-20190315/v6 v6.0.11 // indirect
-	github.com/alibabacloud-go/adb-20211201/v4 v4.7.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
