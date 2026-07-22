@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	util "github.com/alibabacloud-go/tea-utils/service"
@@ -176,6 +177,11 @@ func (r *kvstoreShardAdditionalBandwidthResource) Read(ctx context.Context, req 
 	state.CurrentBw = types.Int64Value(currentBw)
 	state.IsBurstOpen = types.BoolValue(isBurstOpen)
 
+	// During import, bandwidth may be unknown (null) — populate from current bandwidth
+	if state.Bandwidth.IsNull() {
+		state.Bandwidth = types.Int64Value(currentBw)
+	}
+
 	setStateDiags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(setStateDiags...)
 }
@@ -256,7 +262,19 @@ func (r *kvstoreShardAdditionalBandwidthResource) Delete(ctx context.Context, re
 
 func (r *kvstoreShardAdditionalBandwidthResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: instance_id:node_id
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// e.g. terraform import st-alicloud_kvstore_shard_additional_bandwidth.foo r-xxxxx:r-xxxxx-db-0
+	parts := strings.SplitN(req.ID, ":", 2)
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"[IMPORT ERROR] Invalid import ID format.",
+			"Expected format: instance_id:node_id (e.g. r-xxxxx:r-xxxxx-db-0). Got: "+req.ID,
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_id"), types.StringValue(parts[0]))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("node_id"), types.StringValue(parts[1]))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(req.ID))...)
 }
 
 // enableAdditionalBandwidth calls EnableAdditionalBandwidth API for a specific shard.
