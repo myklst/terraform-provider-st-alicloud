@@ -36,7 +36,6 @@ func NewKvstoreShardAdditionalBandwidthResource() resource.Resource {
 type kvstoreShardAdditionalBandwidthResource struct {
 	client    *alicloudKvstoreClient.Client
 	rawClient *alicloudOpenapiClient.Client
-	region    string
 }
 
 type kvstoreShardAdditionalBandwidthModel struct {
@@ -103,7 +102,6 @@ func (r *kvstoreShardAdditionalBandwidthResource) Configure(_ context.Context, r
 	}
 	r.client = req.ProviderData.(alicloudClients).kvstoreClient
 	r.rawClient = req.ProviderData.(alicloudClients).kvstoreRawClient
-	r.region = req.ProviderData.(alicloudClients).region
 }
 
 func (r *kvstoreShardAdditionalBandwidthResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -450,7 +448,6 @@ func (r *kvstoreShardAdditionalBandwidthResource) waitForInstanceNormal(instance
 			Style:       tea.String("RPC"),
 		}
 		queries := map[string]any{}
-		queries["RegionId"] = tea.String(r.region)
 		queries["InstanceIds"] = tea.String(instanceId)
 		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
 			Query: openapiutil.Query(queries),

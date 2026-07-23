@@ -38,7 +38,6 @@ import (
 
 // Wrapper of AliCloud client
 type alicloudClients struct {
-	region            string
 	baseClient        *alicloudBaseClient.Client
 	cdnClient         *alicloudCdnClient.Client
 	antiddosClient    *alicloudAntiddosClient.Client
@@ -522,7 +521,6 @@ func (p *alicloudProvider) Configure(ctx context.Context, req provider.Configure
 		adbClient:         adbClient,
 		adbLakeClient:     adbLakeClient,
 		emrClient:         emrClient,
-		region:            region,
 		csClient:          csClient,
 		essClient:         essClient,
 		servicemeshClient: servicemeshClient,

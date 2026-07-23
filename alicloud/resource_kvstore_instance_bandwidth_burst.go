@@ -31,7 +31,6 @@ func NewKvstoreInstanceBandwidthBurstResource() resource.Resource {
 
 type kvstoreInstanceBandwidthBurstResource struct {
 	client *alicloudOpenapiClient.Client
-	region string
 }
 
 type kvstoreInstanceBandwidthBurstModel struct {
@@ -76,7 +75,6 @@ func (r *kvstoreInstanceBandwidthBurstResource) Configure(_ context.Context, req
 		return
 	}
 	r.client = req.ProviderData.(alicloudClients).kvstoreRawClient
-	r.region = req.ProviderData.(alicloudClients).region
 }
 
 func (r *kvstoreInstanceBandwidthBurstResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -359,7 +357,6 @@ func (r *kvstoreInstanceBandwidthBurstResource) waitForInstanceNormal(instanceId
 			Style:       tea.String("RPC"),
 		}
 		queries := map[string]any{}
-		queries["RegionId"] = tea.String(r.region)
 		queries["InstanceIds"] = tea.String(instanceId)
 		openapiReq := &alicloudOpenapiClient.OpenApiRequest{
 			Query: openapiutil.Query(queries),
