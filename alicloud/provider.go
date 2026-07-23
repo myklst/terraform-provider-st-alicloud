@@ -574,7 +574,6 @@ func (p *alicloudProvider) Resources(_ context.Context) []func() resource.Resour
 		NewVervericaMemberResource,
 		NewFoasconsoleNamespaceSpecResource,
 		NewSlbListenerWhitelistAclAttachmentResource,
-		NewKvstoreInstanceBandwidthBurstResource,
-		NewKvstoreShardAdditionalBandwidthResource,
+		NewKvstoreAdditionalBandwidthResource,
 	}
 }
