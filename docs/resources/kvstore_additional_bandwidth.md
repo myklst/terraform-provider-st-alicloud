@@ -58,10 +58,7 @@ The following arguments are supported:
 
 * `instance_id` - (Required, Forces new resource) The ID of the Redis instance.
 * `node_id` - (Optional, Forces new resource) The shard (node) ID for per-shard bandwidth, in InsName format (e.g. `r-xxxxx-db-0`). Omit or set to `"All"` for instance-level burst. Use `DescribeRoleZoneInfo` or `DescribeLogicInstanceTopology` to list available node IDs.
-* `bandwidth` - (Optional) Additional bandwidth in MB/s. Set to `0` (default) for instance-level burst only. Must be a positive integer for per-shard additional bandwidth. The provider validates this against the instance's burst cap when burst is enabled (`IntranetBandWidthBurst > 0`):
-  * Per-shard: must not exceed `IntranetBandWidthBurst - DefaultBandWidth`
-  * Instance-level (All): must not exceed `(IntranetBandWidthBurst - DefaultBandWidth) × shard_count`
-  * When burst is disabled (`IntranetBandWidthBurst = 0`), validation is skipped and the API rejects invalid values.
+* `bandwidth` - (Optional) Additional bandwidth in MB/s. Set to `0` (default) for instance-level burst only. Must be a positive integer for per-shard additional bandwidth. The max per-shard additional bandwidth is `IntranetBandWidthBurst - DefaultBandWidth` (both read from the API). Validate this in your Terraform `variable` `validation` blocks.
 * `bandwidth_burst` - (Optional) Whether to enable bandwidth burst. Defaults to `true`.
 
 ## Attribute Reference
