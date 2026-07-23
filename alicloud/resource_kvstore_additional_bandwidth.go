@@ -135,6 +135,18 @@ func (r *kvstoreAdditionalBandwidthResource) Create(ctx context.Context, req res
 	bandwidth := plan.Bandwidth.ValueInt64()
 	burst := plan.BandwidthBurst.ValueBool()
 
+	// When burst is enabled, apply it first so the burst cap (IntranetBandWidthBurst)
+	// is populated. This lets validateBandwidth read the real max limit.
+	if burst {
+		if err := r.enableAdditionalBandwidth(instanceId, nodeId, 0, true); err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to enable bandwidth burst.",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	if err := r.validateBandwidth(instanceId, nodeId, bandwidth); err != nil {
 		resp.Diagnostics.AddError("[VALIDATION ERROR]", err.Error())
 		return
@@ -212,6 +224,18 @@ func (r *kvstoreAdditionalBandwidthResource) Update(ctx context.Context, req res
 	nodeId := plan.NodeId.ValueString()
 	bandwidth := plan.Bandwidth.ValueInt64()
 	burst := plan.BandwidthBurst.ValueBool()
+
+	// When burst is enabled, apply it first so the burst cap (IntranetBandWidthBurst)
+	// is populated. This lets validateBandwidth read the real max limit.
+	if burst {
+		if err := r.enableAdditionalBandwidth(instanceId, nodeId, 0, true); err != nil {
+			resp.Diagnostics.AddError(
+				"[API ERROR] Failed to enable bandwidth burst.",
+				err.Error(),
+			)
+			return
+		}
+	}
 
 	if err := r.validateBandwidth(instanceId, nodeId, bandwidth); err != nil {
 		resp.Diagnostics.AddError("[VALIDATION ERROR]", err.Error())
