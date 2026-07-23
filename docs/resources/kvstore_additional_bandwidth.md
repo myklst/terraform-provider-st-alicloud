@@ -58,7 +58,9 @@ The following arguments are supported:
 
 * `instance_id` - (Required, Forces new resource) The ID of the Redis instance.
 * `node_id` - (Optional, Forces new resource) The shard (node) ID for per-shard bandwidth, in InsName format (e.g. `r-xxxxx-db-0`). Omit or set to `"All"` for instance-level burst. Use `DescribeRoleZoneInfo` or `DescribeLogicInstanceTopology` to list available node IDs.
-* `bandwidth` - (Optional) Additional bandwidth in MB/s for a specific shard. Set to `0` (default) for instance-level burst only. Must be a positive integer for per-shard additional bandwidth.
+* `bandwidth` - (Optional) Additional bandwidth in MB/s. Set to `0` (default) for instance-level burst only. Must be a positive integer for per-shard additional bandwidth. The provider validates this against the instance's burst cap:
+  * Per-shard: must not exceed `IntranetBandWidthBurst - DefaultBandWidth`
+  * Instance-level (All): must not exceed `(IntranetBandWidthBurst - DefaultBandWidth) × shard_count`
 * `bandwidth_burst` - (Optional) Whether to enable bandwidth burst. Defaults to `true`.
 
 ## Attribute Reference
@@ -66,9 +68,6 @@ The following arguments are supported:
 The following attributes are exported:
 
 * `id` - The resource ID. Format: `instance_id` (instance-level) or `instance_id:node_id` (per-shard).
-* `current_bandwidth` - The current total bandwidth of the shard (per-shard only).
-* `burst_bandwidth` - The instance-level burst bandwidth in MB/s. `0` means burst is disabled.
-* `is_bandwidth_service_open` - Whether the bandwidth service is open for this node/shard.
 
 ## Import
 
@@ -90,5 +89,5 @@ terraform import st-alicloud_kvstore_additional_bandwidth.shard_0 r-xxxxx:r-xxxx
 * Per-shard bandwidth is permanent additional bandwidth purchased for a specific shard.
 * Both operations use the `EnableAdditionalBandwidth` API with different `NodeId` values (`All` vs specific shard).
 * Deleting the resource resets bandwidth to default (0 additional, burst disabled).
-* The API may take 2-3 minutes to complete as the instance goes through `Changing` → `Normal` status.
-* If applying both burst and per-shard resources simultaneously, the provider will retry on concurrent operation errors. Use `depends_on` for cleaner sequential ordering.
+* The API may take 2-4 minutes to complete as the instance goes through `Changing` → `Normal` status.
+* If applying both burst and per-shard resources simultaneously, the provider retries on concurrent operation errors. Use `depends_on` for cleaner sequential ordering.

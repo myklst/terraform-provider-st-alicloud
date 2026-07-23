@@ -40,14 +40,11 @@ type kvstoreAdditionalBandwidthResource struct {
 }
 
 type kvstoreAdditionalBandwidthModel struct {
-	Id                     types.String `tfsdk:"id"`
-	InstanceId             types.String `tfsdk:"instance_id"`
-	NodeId                 types.String `tfsdk:"node_id"`
-	Bandwidth              types.Int64  `tfsdk:"bandwidth"`
-	BandwidthBurst         types.Bool   `tfsdk:"bandwidth_burst"`
-	CurrentBandwidth       types.Int64  `tfsdk:"current_bandwidth"`
-	BurstBandwidth         types.Int64  `tfsdk:"burst_bandwidth"`
-	IsBandwidthServiceOpen types.Bool   `tfsdk:"is_bandwidth_service_open"`
+	Id             types.String `tfsdk:"id"`
+	InstanceId     types.String `tfsdk:"instance_id"`
+	NodeId         types.String `tfsdk:"node_id"`
+	Bandwidth      types.Int64  `tfsdk:"bandwidth"`
+	BandwidthBurst types.Bool   `tfsdk:"bandwidth_burst"`
 }
 
 func (r *kvstoreAdditionalBandwidthResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -99,18 +96,6 @@ func (r *kvstoreAdditionalBandwidthResource) Schema(_ context.Context, _ resourc
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
 			},
-			"current_bandwidth": schema.Int64Attribute{
-				Description: "The current total bandwidth of the shard (read-only, per-shard only).",
-				Computed:    true,
-			},
-			"burst_bandwidth": schema.Int64Attribute{
-				Description: "The instance-level burst bandwidth in MB/s (read-only). 0 means burst is disabled.",
-				Computed:    true,
-			},
-			"is_bandwidth_service_open": schema.BoolAttribute{
-				Description: "Whether the bandwidth service is open for this node/shard (read-only).",
-				Computed:    true,
-			},
 		},
 	}
 }
@@ -150,6 +135,15 @@ func (r *kvstoreAdditionalBandwidthResource) Create(ctx context.Context, req res
 	bandwidth := plan.Bandwidth.ValueInt64()
 	burst := plan.BandwidthBurst.ValueBool()
 
+	// Validate bandwidth against instance burst cap before calling API
+	if err := r.validateBandwidth(instanceId, nodeId, bandwidth); err != nil {
+		resp.Diagnostics.AddError(
+			"[VALIDATION ERROR] Bandwidth exceeds instance limit.",
+			err.Error(),
+		)
+		return
+	}
+
 	err := r.enableAdditionalBandwidth(instanceId, nodeId, bandwidth, burst)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -159,24 +153,12 @@ func (r *kvstoreAdditionalBandwidthResource) Create(ctx context.Context, req res
 		return
 	}
 
-	currentBw, _, burstBw, isBwOpen, err := r.readBandwidth(instanceId, nodeId)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to read Redis bandwidth after create.",
-			err.Error(),
-		)
-		return
-	}
-
 	state := &kvstoreAdditionalBandwidthModel{
-		Id:                     types.StringValue(makeId(instanceId, nodeId)),
-		InstanceId:             plan.InstanceId,
-		NodeId:                 plan.NodeId,
-		Bandwidth:              plan.Bandwidth,
-		BandwidthBurst:         plan.BandwidthBurst,
-		CurrentBandwidth:       types.Int64Value(currentBw),
-		BurstBandwidth:         types.Int64Value(burstBw),
-		IsBandwidthServiceOpen: types.BoolValue(isBwOpen),
+		Id:             types.StringValue(makeId(instanceId, nodeId)),
+		InstanceId:     plan.InstanceId,
+		NodeId:         plan.NodeId,
+		Bandwidth:      plan.Bandwidth,
+		BandwidthBurst: plan.BandwidthBurst,
 	}
 
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -194,7 +176,7 @@ func (r *kvstoreAdditionalBandwidthResource) Read(ctx context.Context, req resou
 	instanceId := state.InstanceId.ValueString()
 	nodeId := state.NodeId.ValueString()
 
-	currentBw, defaultBw, burstBw, isBwOpen, err := r.readBandwidth(instanceId, nodeId)
+	currentBw, defaultBw, burstBw, _, err := r.readBandwidth(instanceId, nodeId)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"[API ERROR] Failed to read Redis bandwidth.",
@@ -204,10 +186,7 @@ func (r *kvstoreAdditionalBandwidthResource) Read(ctx context.Context, req resou
 	}
 
 	state.Id = types.StringValue(makeId(instanceId, nodeId))
-	state.CurrentBandwidth = types.Int64Value(currentBw)
-	state.BurstBandwidth = types.Int64Value(burstBw)
-	state.IsBandwidthServiceOpen = types.BoolValue(isBwOpen)
-	state.BandwidthBurst = types.BoolValue(isBwOpen)
+	state.BandwidthBurst = types.BoolValue(burstBw > 0)
 
 	if isInstanceLevel(nodeId) {
 		state.Bandwidth = types.Int64Value(0)
@@ -239,6 +218,15 @@ func (r *kvstoreAdditionalBandwidthResource) Update(ctx context.Context, req res
 	bandwidth := plan.Bandwidth.ValueInt64()
 	burst := plan.BandwidthBurst.ValueBool()
 
+	// Validate bandwidth against instance burst cap before calling API
+	if err := r.validateBandwidth(instanceId, nodeId, bandwidth); err != nil {
+		resp.Diagnostics.AddError(
+			"[VALIDATION ERROR] Bandwidth exceeds instance limit.",
+			err.Error(),
+		)
+		return
+	}
+
 	err := r.enableAdditionalBandwidth(instanceId, nodeId, bandwidth, burst)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -248,24 +236,12 @@ func (r *kvstoreAdditionalBandwidthResource) Update(ctx context.Context, req res
 		return
 	}
 
-	currentBw, _, burstBw, isBwOpen, err := r.readBandwidth(instanceId, nodeId)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"[API ERROR] Failed to read Redis bandwidth after update.",
-			err.Error(),
-		)
-		return
-	}
-
 	state := &kvstoreAdditionalBandwidthModel{
-		Id:                     types.StringValue(makeId(instanceId, nodeId)),
-		InstanceId:             plan.InstanceId,
-		NodeId:                 plan.NodeId,
-		Bandwidth:              plan.Bandwidth,
-		BandwidthBurst:         plan.BandwidthBurst,
-		CurrentBandwidth:       types.Int64Value(currentBw),
-		BurstBandwidth:         types.Int64Value(burstBw),
-		IsBandwidthServiceOpen: types.BoolValue(isBwOpen),
+		Id:             types.StringValue(makeId(instanceId, nodeId)),
+		InstanceId:     plan.InstanceId,
+		NodeId:         plan.NodeId,
+		Bandwidth:      plan.Bandwidth,
+		BandwidthBurst: plan.BandwidthBurst,
 	}
 
 	setStateDiags := resp.State.Set(ctx, &state)
@@ -383,6 +359,189 @@ func (r *kvstoreAdditionalBandwidthResource) readBandwidth(instanceId, nodeId st
 	}
 	currentBw, defaultBw, isBwOpen, err = r.readNodeBandwidth(instanceId, nodeId)
 	return currentBw, defaultBw, 0, isBwOpen, err
+}
+
+// validateBandwidth checks that the requested bandwidth does not exceed the instance's burst cap.
+// Per-shard max additional = IntranetBandWidthBurst - DefaultBandWidth
+// Instance-level (All) max additional = (IntranetBandWidthBurst - DefaultBandWidth) * shard_count
+func (r *kvstoreAdditionalBandwidthResource) validateBandwidth(instanceId, nodeId string, bandwidth int64) error {
+	if bandwidth <= 0 {
+		return nil
+	}
+
+	// Read burst cap (per-shard max total bandwidth, including base)
+	burstBw, err := r.readBurst(instanceId)
+	if err != nil {
+		return fmt.Errorf("failed to read burst cap for validation: %w", err)
+	}
+
+	// Read node info to get default bandwidth and shard count
+	_, defaultBw, _, err := r.readNodeBandwidthAndCount(instanceId, nodeId)
+	if err != nil {
+		return fmt.Errorf("failed to read node info for validation: %w", err)
+	}
+
+	maxPerShard := burstBw - defaultBw
+	if maxPerShard < 0 {
+		maxPerShard = 0
+	}
+
+	if isInstanceLevel(nodeId) {
+		// Instance-level: bandwidth applies to all shards, must not exceed total burst cap
+		shardCount, err := r.getShardCount(instanceId)
+		if err != nil {
+			return fmt.Errorf("failed to read shard count for validation: %w", err)
+		}
+		maxTotal := maxPerShard * shardCount
+		if bandwidth > maxTotal {
+			return fmt.Errorf("bandwidth %d MB/s exceeds instance limit %d MB/s (per-shard max %d × %d shards). IntranetBandWidthBurst=%d, DefaultBandWidth=%d",
+				bandwidth, maxTotal, maxPerShard, shardCount, burstBw, defaultBw)
+		}
+	} else {
+		// Per-shard: must not exceed per-shard burst cap
+		if bandwidth > maxPerShard {
+			return fmt.Errorf("bandwidth %d MB/s exceeds per-shard limit %d MB/s (IntranetBandWidthBurst=%d - DefaultBandWidth=%d)",
+				bandwidth, maxPerShard, burstBw, defaultBw)
+		}
+	}
+	return nil
+}
+
+// readNodeBandwidthAndCount reads the default bandwidth from the first matching node.
+// For instance-level, it reads the first node's default bandwidth.
+func (r *kvstoreAdditionalBandwidthResource) readNodeBandwidthAndCount(instanceId, nodeId string) (currentBw, defaultBw int64, isBwOpen bool, err error) {
+	runtime := &util.RuntimeOptions{}
+	params := &alicloudOpenapiClient.Params{
+		Action:      tea.String("DescribeRoleZoneInfo"),
+		Version:     tea.String("2015-01-01"),
+		Protocol:    tea.String("HTTPS"),
+		Pathname:    tea.String("/"),
+		Method:      tea.String("POST"),
+		AuthType:    tea.String("AK"),
+		BodyType:    tea.String("json"),
+		ReqBodyType: tea.String("json"),
+		Style:       tea.String("RPC"),
+	}
+	queries := map[string]any{}
+	queries["InstanceId"] = tea.String(instanceId)
+	openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+		Query: openapiutil.Query(queries),
+	}
+	result, err := r.client.CallApi(params, openapiReq, runtime)
+	if err != nil {
+		return 0, 0, false, err
+	}
+
+	if result == nil {
+		return 0, 0, false, fmt.Errorf("no response from DescribeRoleZoneInfo for instance %s", instanceId)
+	}
+
+	body, ok := result["body"].(map[string]any)
+	if !ok {
+		return 0, 0, false, fmt.Errorf("invalid response body for instance %s", instanceId)
+	}
+
+	nodeContainer, ok := body["Node"].(map[string]any)
+	if !ok {
+		return 0, 0, false, fmt.Errorf("no Node in response for instance %s", instanceId)
+	}
+
+	nodes, ok := nodeContainer["NodeInfo"].([]any)
+	if !ok || len(nodes) == 0 {
+		return 0, 0, false, fmt.Errorf("no NodeInfo in response for instance %s", instanceId)
+	}
+
+	// For instance-level: return first node's default bandwidth
+	// For per-shard: match by InsName
+	if isInstanceLevel(nodeId) {
+		if firstNode, ok := nodes[0].(map[string]any); ok {
+			defaultBw = toInt64(firstNode["DefaultBandWidth"])
+			currentBw = toInt64(firstNode["CurrentBandWidth"])
+			if v, ok := firstNode["IsOpenBandWidthService"].(bool); ok {
+				isBwOpen = v
+			}
+			return currentBw, defaultBw, isBwOpen, nil
+		}
+	}
+
+	for _, n := range nodes {
+		node, ok := n.(map[string]any)
+		if !ok {
+			continue
+		}
+		insName, ok := node["InsName"].(string)
+		if !ok {
+			continue
+		}
+		if insName == nodeId {
+			currentBw = toInt64(node["CurrentBandWidth"])
+			defaultBw = toInt64(node["DefaultBandWidth"])
+			if v, ok := node["IsOpenBandWidthService"].(bool); ok {
+				isBwOpen = v
+			}
+			return currentBw, defaultBw, isBwOpen, nil
+		}
+	}
+
+	return 0, 0, false, fmt.Errorf("node %s not found in instance %s", nodeId, instanceId)
+}
+
+// getShardCount returns the number of unique shards (by InsName) in the instance.
+func (r *kvstoreAdditionalBandwidthResource) getShardCount(instanceId string) (int64, error) {
+	runtime := &util.RuntimeOptions{}
+	params := &alicloudOpenapiClient.Params{
+		Action:      tea.String("DescribeRoleZoneInfo"),
+		Version:     tea.String("2015-01-01"),
+		Protocol:    tea.String("HTTPS"),
+		Pathname:    tea.String("/"),
+		Method:      tea.String("POST"),
+		AuthType:    tea.String("AK"),
+		BodyType:    tea.String("json"),
+		ReqBodyType: tea.String("json"),
+		Style:       tea.String("RPC"),
+	}
+	queries := map[string]any{}
+	queries["InstanceId"] = tea.String(instanceId)
+	openapiReq := &alicloudOpenapiClient.OpenApiRequest{
+		Query: openapiutil.Query(queries),
+	}
+	result, err := r.client.CallApi(params, openapiReq, runtime)
+	if err != nil {
+		return 0, err
+	}
+
+	if result == nil {
+		return 0, fmt.Errorf("no response from DescribeRoleZoneInfo for instance %s", instanceId)
+	}
+
+	body, ok := result["body"].(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("invalid response body for instance %s", instanceId)
+	}
+
+	nodeContainer, ok := body["Node"].(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("no Node in response for instance %s", instanceId)
+	}
+
+	nodes, ok := nodeContainer["NodeInfo"].([]any)
+	if !ok || len(nodes) == 0 {
+		return 0, fmt.Errorf("no NodeInfo in response for instance %s", instanceId)
+	}
+
+	// Count unique InsNames (shards). MASTER+SLAVE share the same InsName,
+	// so we deduplicate to get the actual shard count.
+	seen := map[string]bool{}
+	for _, n := range nodes {
+		node, ok := n.(map[string]any)
+		if !ok {
+			continue
+		}
+		if insName, ok := node["InsName"].(string); ok {
+			seen[insName] = true
+		}
+	}
+	return int64(len(seen)), nil
 }
 
 // readBurst reads instance-level burst bandwidth value from DescribeIntranetAttribute.
